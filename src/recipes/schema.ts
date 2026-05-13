@@ -1,6 +1,227 @@
 import Type, { type Static } from "typebox";
 import { categoryKeys } from "../catalogs/catalogs.js";
-import { SMART_HEATING_TEMPERATURE_STEPS, SMART_PROMPT_MODE_NAMES } from "./constants.js";
+import {
+  SMART_FERMENTATION_TEMPERATURE_STEPS,
+  SMART_HEATING_TEMPERATURE_STEPS,
+  SMART_LOW_TEMPERATURE_STEPS
+} from "./constants.js";
+
+const ModeObjectOptions = {
+  additionalProperties: false,
+  description: "Mode settings in a model-friendly shape. The library converts this into the raw Monsieur Cuisine mode payload."
+} as const;
+
+const SMART_NON_ZERO_HEATING_TEMPERATURE_STEPS = SMART_HEATING_TEMPERATURE_STEPS.filter(
+  (temperature) => temperature !== 0
+) as Exclude<(typeof SMART_HEATING_TEMPERATURE_STEPS)[number], 0>[];
+
+function integerEnumSchema<const T extends readonly number[]>(values: T, description: string) {
+  return Type.Unsafe<T[number]>({
+    type: "integer",
+    enum: [...values],
+    description
+  });
+}
+
+const HeatingTemperatureSchema = integerEnumSchema(
+  SMART_HEATING_TEMPERATURE_STEPS,
+  `Temperature in C. Use one of: ${SMART_HEATING_TEMPERATURE_STEPS.join(", ")}.`
+);
+
+const NonZeroHeatingTemperatureSchema = integerEnumSchema(
+  SMART_NON_ZERO_HEATING_TEMPERATURE_STEPS,
+  `Temperature in C. Use one of: ${SMART_NON_ZERO_HEATING_TEMPERATURE_STEPS.join(", ")}.`
+);
+
+const LowTemperatureSchema = integerEnumSchema(
+  SMART_LOW_TEMPERATURE_STEPS,
+  `Temperature in C. Use one of: ${SMART_LOW_TEMPERATURE_STEPS.join(", ")}.`
+);
+
+const FermentationTemperatureSchema = integerEnumSchema(
+  SMART_FERMENTATION_TEMPERATURE_STEPS,
+  `Temperature in C. Use one of: ${SMART_FERMENTATION_TEMPERATURE_STEPS.join(", ")}.`
+);
+
+const SecondsRemainderSchema = Type.Integer({
+  minimum: 0,
+  maximum: 59,
+  description: "Remaining seconds after whole minutes."
+});
+
+function minutesSchema(maximum: number, description: string) {
+  return Type.Integer({ minimum: 0, maximum, description });
+}
+
+function timeFields(maximumMinutes: number, description: string) {
+  return {
+    minutes: minutesSchema(maximumMinutes, description),
+    seconds: SecondsRemainderSchema
+  };
+}
+
+const RecipeStepModeSchema = Type.Union(
+  [
+    Type.Object(
+      {
+        type: Type.Literal("none", { description: "Human-only instruction without an automatic Smart mode." })
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("manualCooking"),
+        temperature: Type.Literal(0),
+        ...timeFields(99, "Whole minutes for manual cooking. Combined time must be 1-5940 seconds."),
+        speed: Type.Integer({ minimum: 0, maximum: 10, description: "Manual cooking speed without heating and with right rotation." }),
+        rotationDirection: Type.Literal("right", { description: "Blade direction for manual cooking." })
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("manualCooking"),
+        temperature: Type.Literal(0),
+        ...timeFields(99, "Whole minutes for manual cooking. Combined time must be 1-5940 seconds."),
+        speed: Type.Integer({ minimum: 0, maximum: 3, description: "Manual cooking speed. Left rotation is limited to speed 0-3." }),
+        rotationDirection: Type.Literal("left", { description: "Blade direction for manual cooking." })
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("manualCooking"),
+        temperature: NonZeroHeatingTemperatureSchema,
+        ...timeFields(99, "Whole minutes for manual cooking. Combined time must be 1-5940 seconds."),
+        speed: Type.Integer({ minimum: 0, maximum: 3, description: "Manual cooking speed. Heating is limited to speed 0-3." }),
+        rotationDirection: Type.Union([Type.Literal("left"), Type.Literal("right")], { description: "Blade direction for manual cooking." })
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("turbo"),
+        seconds: Type.Integer({ minimum: 1, maximum: 20, description: "Turbo duration in seconds." })
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("scale"),
+        grams: Type.Integer({ minimum: 5, maximum: 5000, description: "Target weight for scale mode." })
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("roast"),
+        temperature: HeatingTemperatureSchema,
+        ...timeFields(14, "Whole minutes for roasting. Combined time must be 0-840 seconds.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("solidDoughKnead"),
+        ...timeFields(4, "Whole minutes for solid dough kneading. Combined time must be 45-240 seconds.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("softDoughKnead"),
+        ...timeFields(4, "Whole minutes for soft dough kneading. Combined time must be 45-240 seconds.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("liquidDoughKnead"),
+        ...timeFields(6, "Whole minutes for liquid dough kneading. Combined time must be 45-360 seconds.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("steam"),
+        ...timeFields(60, "Whole minutes for steaming. Combined time must be 0-3600 seconds.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("sousVide"),
+        temperature: Type.Integer({ minimum: 40, maximum: 85, description: "Sous-vide temperature in C." }),
+        ...timeFields(720, "Whole minutes for sous-vide. Combined time must be 15-720 minutes.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("slowCooking"),
+        temperature: LowTemperatureSchema,
+        ...timeFields(480, "Whole minutes for slow cooking. Combined time must be 15-480 minutes.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("cookingEggs"),
+        size: Type.Union([Type.Literal("small"), Type.Literal("medium"), Type.Literal("large")], { description: "Egg size." }),
+        texture: Type.Union([Type.Literal("soft"), Type.Literal("waxy_soft"), Type.Literal("hard")], {
+          description: "Egg result. Use waxy_soft for medium/soft-boiled."
+        })
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("precleaning"),
+        duration: Type.Union([Type.Literal("short"), Type.Literal("long")], { description: "Precleaning duration." })
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("fermentation"),
+        temperature: FermentationTemperatureSchema,
+        ...timeFields(720, "Whole minutes for fermentation. Combined time must be 30-720 minutes.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("riceCooking"),
+        ...timeFields(40, "Whole minutes for rice cooking. Combined time must be 1200-2400 seconds.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("foodProcessor"),
+        ...timeFields(5, "Whole minutes for food processor mode. Combined time must be 1-300 seconds.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("puree"),
+        ...timeFields(2, "Whole minutes for puree mode. Combined time must be 30-120 seconds.")
+      },
+      ModeObjectOptions
+    ),
+    Type.Object(
+      {
+        type: Type.Literal("smoothie"),
+        ...timeFields(2, "Whole minutes for smoothie mode. Combined time must be 30-120 seconds.")
+      },
+      ModeObjectOptions
+    )
+  ],
+  {
+    description: "Discriminated Smart mode settings. Each mode type only accepts the fields that mode uses."
+  }
+);
 
 export const RecipeInputSchema = Type.Object(
   {
@@ -92,30 +313,7 @@ export const RecipeInputSchema = Type.Object(
             {
               title: Type.String({ minLength: 1, maxLength: 80 }),
               description: Type.String({ maxLength: 240, description: "Step instruction. Must fit the Monsieur Cuisine UI, so stay under 240 characters." }),
-              mode: Type.Object(
-                {
-                  type: Type.Union(SMART_PROMPT_MODE_NAMES.map((mode) => Type.Literal(mode)), {
-                    description: "Semantic Smart mode. Use none for human-only instructions."
-                  }),
-                  temperature: Type.Optional(Type.Integer({
-                    minimum: 0,
-                    maximum: 130,
-                    description: `Temperature in C. For manualCooking and roast use one of: ${SMART_HEATING_TEMPERATURE_STEPS.join(", ")}. For sousVide use 40-85. For fermentation use 37,40,45,50,55,60,65.`
-                  })),
-                  minutes: Type.Optional(Type.Integer({ minimum: 0, maximum: 720, description: "Whole minutes for the automatic mode." })),
-                  seconds: Type.Optional(Type.Integer({ minimum: 0, maximum: 59, description: "Remaining seconds for the automatic mode." })),
-                  speed: Type.Optional(Type.Integer({ minimum: 0, maximum: 10, description: "Manual cooking speed. When heating, use 0-3." })),
-                  rotationDirection: Type.Optional(Type.Union([Type.Literal("left"), Type.Literal("right")], { description: "Blade direction for manual cooking." })),
-                  grams: Type.Optional(Type.Integer({ minimum: 5, maximum: 5000, description: "Target weight for scale mode." })),
-                  size: Type.Optional(Type.Union([Type.Literal("small"), Type.Literal("medium"), Type.Literal("large")], { description: "Egg size for cookingEggs." })),
-                  texture: Type.Optional(Type.Union([Type.Literal("soft"), Type.Literal("waxy_soft"), Type.Literal("hard")], { description: "Egg result for cookingEggs. Use waxy_soft for medium/soft-boiled." })),
-                  duration: Type.Optional(Type.Union([Type.Literal("short"), Type.Literal("long")], { description: "Precleaning duration." }))
-                },
-                {
-                  additionalProperties: false,
-                  description: "Mode settings in a model-friendly shape. The library converts this into the raw Monsieur Cuisine mode payload."
-                }
-              )
+              mode: RecipeStepModeSchema
             },
             { additionalProperties: false }
           ),

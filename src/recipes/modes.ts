@@ -7,6 +7,9 @@ import {
 } from "./constants.js";
 import type { PromptModeInput } from "./types.js";
 
+type TimeModeInput = Extract<PromptModeInput, { seconds: number }>;
+type TemperatureTimeModeInput = Extract<PromptModeInput, { temperature: number; minutes: number; seconds: number }>;
+
 export type RawSmartMode =
   | null
   | { type: string; modeSetting: null; deviceSettings: Array<Record<string, unknown>> }
@@ -116,24 +119,25 @@ export function promptModeToRawMode(input?: PromptModeInput | null): RawSmartMod
     case "smoothie":
       return timeMode(SMART_MODE_TYPES.smoothie, input, 30, 120);
     default:
-      assertNever(input.type);
+      assertNever(input);
   }
 }
 
-function timeMode(type: string, input: PromptModeInput, min: number, max: number) {
-  const time = secondsFromParts(input.minutes ?? 0, input.seconds ?? 0);
+function timeMode(type: string, input: TimeModeInput, min: number, max: number) {
+  const minutes = "minutes" in input ? input.minutes : 0;
+  const time = secondsFromParts(minutes, input.seconds);
   assertIntegerRange(time, min, max, `${input.type}.time`);
   return { type, modeSetting: null, deviceSettings: [{ order: 0, time }] };
 }
 
 function temperatureTimeMode(
   type: string,
-  input: PromptModeInput,
+  input: TemperatureTimeModeInput,
   min: number,
   max: number,
   temperatureResolver: () => number
 ) {
-  const time = secondsFromParts(input.minutes ?? 0, input.seconds ?? 0);
+  const time = secondsFromParts(input.minutes, input.seconds);
   assertIntegerRange(time, min, max, `${input.type}.time`);
   return {
     type,

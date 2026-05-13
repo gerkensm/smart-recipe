@@ -36,6 +36,10 @@ function simplifyForOpenAI(value: unknown): void {
     return;
   }
   const object = value as Record<string, unknown>;
+  if ("const" in object) {
+    object.enum = [object.const];
+    delete object.const;
+  }
   for (const key of ["default", "examples", "uniqueItems", "if", "then", "else", "patternProperties"]) {
     delete object[key];
   }

@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { getCatalog, resolveCategoryIds } from "../src/catalogs/index.js";
 import { createRecipeUrl } from "../src/mc/urls.js";
 import { createSmartRecipePayload } from "../src/recipes/payload.js";
+import type { CreateSmartRecipePayloadOptions } from "../src/recipes/payload.js";
 import { validateRecipeInput } from "../src/recipes/validation.js";
 
-const recipeInput = {
+const recipeInput: CreateSmartRecipePayloadOptions = {
   title: "Tomatensauce",
   description: "Eine einfache Sauce.",
   locale: "de-DE" as const,
@@ -90,7 +91,25 @@ describe("Smart recipe payloads", () => {
       }
     });
     expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toContain("rotationDirection is left");
+    expect(result.errors.join("\n")).toContain("/servingSize/steps/0/mode/speed must be <= 3");
+  });
+
+  it("rejects fields that do not belong to the selected mode", () => {
+    const result = validateRecipeInput({
+      ...recipeInput,
+      servingSize: {
+        ...recipeInput.servingSize,
+        steps: [
+          {
+            title: "Wiegen",
+            description: "Tomaten einwiegen.",
+            mode: { type: "scale", grams: 400, seconds: 5 }
+          }
+        ]
+      }
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toContain("/servingSize/steps/0/mode must NOT have additional properties");
   });
 
   it("rounds nutrient amounts because the site requires integers", () => {

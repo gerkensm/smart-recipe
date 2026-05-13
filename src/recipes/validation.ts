@@ -27,20 +27,6 @@ export function validateRecipeInput(input: unknown): ValidationResult {
     ? []
     : (validate.errors ?? []).map((error: any) => `${error.instancePath || "/"} ${error.message ?? "is invalid"}`);
 
-  if (ok) {
-    const recipe = input as RecipeInput;
-    recipe.servingSize.steps.forEach((step, index) => {
-      const mode = step.mode;
-      if (mode.type === "manualCooking" && mode.rotationDirection === "left" && (mode.speed ?? 0) > 3) {
-        errors.push(`/servingSize/steps/${index}/mode/speed must be 3 or lower when rotationDirection is left.`);
-      }
-      if (mode.type === "manualCooking" && (mode.temperature ?? 0) > 0 && (mode.speed ?? 0) > 3) {
-        errors.push(`/servingSize/steps/${index}/mode/speed must be 3 or lower when heating.`);
-      }
-    });
-    ok = errors.length === 0;
-  }
-
   return {
     ok,
     errors

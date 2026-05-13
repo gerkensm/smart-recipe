@@ -1,4 +1,5 @@
 import type { CategoryKey, Complexity, SupportedLocale } from "../catalogs/types.js";
+import type { RecipeInput } from "./schema.js";
 
 export interface Nutrient {
   name: "calories" | "carbohydrate" | "fat" | "protein";
@@ -18,38 +19,8 @@ export interface RecipeIngredientGroupInput {
   ingredients: RecipeIngredientInput[];
 }
 
-export type PromptModeType =
-  | "none"
-  | "manualCooking"
-  | "turbo"
-  | "scale"
-  | "roast"
-  | "solidDoughKnead"
-  | "softDoughKnead"
-  | "liquidDoughKnead"
-  | "steam"
-  | "sousVide"
-  | "slowCooking"
-  | "cookingEggs"
-  | "precleaning"
-  | "fermentation"
-  | "riceCooking"
-  | "foodProcessor"
-  | "puree"
-  | "smoothie";
-
-export interface PromptModeInput {
-  type: PromptModeType;
-  temperature?: number;
-  minutes?: number;
-  seconds?: number;
-  speed?: number;
-  rotationDirection?: "left" | "right";
-  grams?: number;
-  size?: "small" | "medium" | "large";
-  texture?: "soft" | "waxy_soft" | "hard";
-  duration?: "short" | "long";
-}
+export type PromptModeInput = RecipeInput["servingSize"]["steps"][number]["mode"];
+export type PromptModeType = PromptModeInput["type"];
 
 export interface RecipeStepInput {
   title: string;

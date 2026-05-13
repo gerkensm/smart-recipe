@@ -13,7 +13,10 @@ export function buildRecipeInstructions(locale: SupportedLocale = "de-DE"): stri
     "Target only Monsieur Cuisine Smart (MC3.0). Make use of the Smart's capabilities as much as possible: weighing, manual cooking, roasting, steaming, Smart dough modes, sous-vide, slow cooking, egg cooking, precleaning, fermentation, rice cooking, food processor, puree, smoothie and turbo. Try to make the recipe as automatic as possible while keeping it realistic.",
     "You may adjust the order of steps or simplify steps so they can be performed with the machine if this does not materially change the final dish. Transform the recipe into a Monsieur-Cuisine-native recipe with as few manual steps as practical.",
     "Avoid workflows that require the user to repeatedly empty the pot unless the source recipe truly requires it. For each step, supply a title.",
-    "Respect the size of the pot (3 liters); adjust the recipe size if the original recipe would otherwise overflow the pot.",
+    "WORKFLOW LOGIC: While you should avoid unnecessarily emptying the pot, you MUST empty and clean it if a subsequent step physically requires a cold, clean, or dry jug (e.g., whipping egg whites, whipping cream, or grinding dry spices after a wet cooking step). Do not combine hot and cold steps improperly.",
+    "STRICT CAPACITY LIMIT: The jug holds a maximum of 3 liters (approx. 3000 g). You MUST mentally calculate the cumulative weight and volume of all ingredients currently in the jug at every step. If the total exceeds 3000 g/ml at any point, you MUST scale down the entire recipe proportionally from the very beginning to ensure safe cooking without overflowing.",
+    "APPLY CULINARY LOGIC: Do not force machine actions that ruin the dish's texture. For example, avoid continuous stirring for dishes that traditionally require undisturbed resting or crust formation (like Paella). Adapt the workflow to make logical sense for a food processor.",
+    "DOUGH LIMIT: While the jug holds 3 liters, the motor cannot knead 3 kg of solid dough. For heavy doughs (bread, pizza) using 'solidDoughKnead', the absolute maximum limit is 1000 g of flour (approx. 1600 g total dough weight). If the source recipe exceeds this, you MUST scale it down.",
     `Use ${localeGuidance.outputLanguage} for every user-facing recipe field and set locale to ${localeGuidance.locale}. Translate where necessary.`,
     `Convert units to ${localeGuidance.unitConvention}`,
     "IMPORTANT: Convert liquid measurements (ml, l) to weight in grams (g) for ingredients wherever it makes sense (for example, 1 ml water-like liquid = 1 g). Use separate scale steps for each ingredient unless this would make the recipe worse. Update the corresponding steps to reflect weighing the liquids.",
@@ -39,10 +42,10 @@ export function buildRecipeInstructions(locale: SupportedLocale = "de-DE"): stri
 export function accessoryHardwareRules(locale: SupportedLocale = "de-DE"): string {
   const { accessoryTerms: terms, accessoryPhrases: phrases } = getLocalePromptGuidance(locale);
   return [
-    `- ${terms.blade}: Always inserted by default. Use ${terms.reverse} with speed 1-3 for gentle stirring when ingredients should not be chopped.`,
+    `- ${terms.blade}: Always inserted by default. CRITICAL RULE: You MUST explicitly use ${terms.reverse} (rotationDirection left) with speed 1-3 for ANY cooking step where solid ingredients (like meat chunks, sausages, pasta, delicate vegetables, or cooked grains) are in the jug and must remain intact. Forward rotation will shred them into mush.`,
     `- ${terms.butterflyWhisk}: Use for whipping cream (minimum 200 g), egg whites (minimum 4 eggs), or emulsifying delicate mixtures. The step must explicitly say "${phrases.insertButterflyWhisk}" before use. Maximum speed is 4. Never use ${terms.turbo}. Never use the ${terms.spatula} while it is inserted.`,
-    `- ${terms.simmeringBasket}: Use for boiling sides such as rice, potatoes, or eggs inside the jug. The step must explicitly say "${phrases.insertSimmeringBasket}". Requires at least 500 g water or other liquid in the jug.`,
-    `- ${terms.steamerAttachment}: Use for steaming on top of the jug. The step must explicitly say "${phrases.attachSteamerAttachment}". Ensure enough liquid is in the jug for the steaming time.`,
+    `- ${terms.simmeringBasket}: Use for boiling sides [...] inside the jug. PHYSICAL LIMIT: The basket is much smaller than the jug. It can hold a maximum of approx. 1000 g to 1200 g of solid food (like potatoes or rice). If the recipe requires more, it must be scaled down.`,
+    `- ${terms.steamerAttachment}: Use for steaming on top of the jug. The step must explicitly say "${phrases.attachSteamerAttachment}". CRITICAL RULE: Steaming requires at least 500 g of thin, freely boiling liquid (like water or clear broth). NEVER schedule a steaming step when the jug contains thick mixtures, stews, or grains that have absorbed most of the liquid (like risotto or thick rice dishes). Thick mixtures trap heat, produce zero steam for the attachment, and will violently burn at the bottom of the jug.`,
     `- ${terms.measuringCup}: Mention when it should be removed for evaporation or kept inserted to reduce splashing.`,
     `- ${terms.turbo}: Maximum 2.5 l liquid in the jug. Never use ${terms.turbo} when the current contents are hotter than 60 C.`
   ].join("\n");
@@ -50,7 +53,7 @@ export function accessoryHardwareRules(locale: SupportedLocale = "de-DE"): strin
 
 export function schemaHintsForModes(): string {
   return [
-    `manualCooking: temperature steps ${SMART_MODE_GUIDE.manualCooking.temperature.steps.join(", ")} C; time 1-5940 s; speed 0-10, but max 3 when temperature > 0; rotationDirection left/right.`,
+    `manualCooking: temperature steps ${SMART_MODE_GUIDE.manualCooking.temperature.steps.join(", ")} C; time 1-5940 s; speed 0-10, but max 3 when temperature > 0; rotationDirection left/right. Use speed 0 if the dish requires simmering without being stirred to pieces.`,
     "turbo: 1-20 s. Do not use when contents are hotter than 60 C, with more than 2.5 l liquid, or while the butterfly whisk is inserted.",
     "scale: 5-5000 g.",
     `roast: temperature steps ${SMART_MODE_GUIDE.roast.temperature.steps.join(", ")} C; time 0-840 s.`,
@@ -74,7 +77,7 @@ export function buildRecipeImagePrompt(page: RetrievedRecipePage, recipe: Recipe
     "Create a new, original image for this recipe.",
     "",
     "Visual direction:",
-    "- Realistic finished dish that clearly reflects the recipe.",
+    "- Realistic finished dish that clearly reflects the recipe, but cooked with a Monsieur Cuisine Smart cooker - so do not show the recipe in traditional cookware, but served on a plate, as nice as possible, but realistically made with a smart one-pot cooking device. Do not show it in the smart cooker, do not make the smart cooker a part of the image - just show the dish on a plat, serving plate, or the like.",
     "- Looks like an ambitious home cook took the photo with a good cellphone camera.",
     "- Expressive, appetizing, warm and natural, but not professional food photography.",
     "- Imperfect home setting is welcome: real plate or bowl, natural kitchen light, modest styling.",
