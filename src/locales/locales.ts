@@ -1,0 +1,325 @@
+import type { CategoryKey, SupportedLocale } from "../catalogs/types.js";
+
+export interface LocaleText {
+  locale: SupportedLocale;
+  outputLanguage: string;
+  unitConvention: string;
+  servingUnitExamples: string;
+  categoryLabel: string;
+  defaultIngredientGroupName: string;
+  categoryLabels: Record<CategoryKey, string>;
+  accessoryTerms: {
+    blade: string;
+    reverse: string;
+    butterflyWhisk: string;
+    simmeringBasket: string;
+    steamerAttachment: string;
+    measuringCup: string;
+    spatula: string;
+    turbo: string;
+  };
+  accessoryPhrases: {
+    insertButterflyWhisk: string;
+    insertSimmeringBasket: string;
+    attachSteamerAttachment: string;
+  };
+}
+
+export const localeTexts: Record<SupportedLocale, LocaleText> = {
+  "cs-CZ": {
+    locale: "cs-CZ",
+    outputLanguage: "Czech",
+    unitConvention: "Czech recipe conventions: g, kg, ml, lžička, lžíce, špetka, kusy; use ml only when grams would be misleading.",
+    servingUnitExamples: "porce, sklenice, kusy",
+    categoryLabel: "Czech site IDs",
+    defaultIngredientGroupName: "Suroviny",
+    categoryLabels: {
+      saucesAndDips: "Omáčky & dipy",
+      soupsAndStews: "Polévky & dušená jídla",
+      salads: "Saláty",
+      sideDishes: "Přílohy",
+      snacks: "Svačiny",
+      mainDishes: "Hlavní jídla",
+      babyFood: "Dětská výživa",
+      drinks: "Nápoje",
+      onePotAllInOne: "One-Pot / Vše v jednom",
+      desserts: "Dezerty",
+      baking: "Pečení",
+      breakfast: "Snídaně",
+      dinner: "Večeře",
+      starters: "Předkrmy",
+      jamAndJelly: "Marmelády & želé",
+      germanCuisine: "Německá kuchyně",
+      frenchCuisine: "Francouzská kuchyně",
+      italianCuisine: "Italská kuchyně",
+      polishCuisine: "Polská kuchyně",
+      spanishCuisine: "Španělská kuchyně",
+      foodProcessor: "Food Processor",
+      vegan: "Veganské",
+      vegetarian: "Vegetariánské"
+    },
+    accessoryTerms: {
+      blade: "nástavec s noži",
+      reverse: "zpětný chod",
+      butterflyWhisk: "metla",
+      simmeringBasket: "vařicí košík",
+      steamerAttachment: "napařovací nástavec",
+      measuringCup: "odměrka",
+      spatula: "stěrka",
+      turbo: "Turbo"
+    },
+    accessoryPhrases: {
+      insertButterflyWhisk: "nasadit metlu",
+      insertSimmeringBasket: "zavěsit vařicí košík",
+      attachSteamerAttachment: "nasadit napařovací nástavec"
+    }
+  },
+  "pl-PL": {
+    locale: "pl-PL",
+    outputLanguage: "Polish",
+    unitConvention: "Polish recipe conventions: g, kg, ml, łyżeczka, łyżka, szczypta, sztuki; use ml only when grams would be misleading.",
+    servingUnitExamples: "porcje, słoiki, sztuki",
+    categoryLabel: "Polish site IDs",
+    defaultIngredientGroupName: "Składniki",
+    categoryLabels: {
+      saucesAndDips: "Sosy i dipy",
+      soupsAndStews: "Zupy i gulasze",
+      salads: "Sałatki",
+      sideDishes: "Dodatki",
+      snacks: "Przekąski",
+      mainDishes: "Dania główne",
+      babyFood: "Jedzenie dla niemowląt",
+      drinks: "Napoje",
+      onePotAllInOne: "One-Pot / All-in-One",
+      desserts: "Desery",
+      baking: "Pieczenie",
+      breakfast: "Śniadanie",
+      dinner: "Kolacja",
+      starters: "Przystawki",
+      jamAndJelly: "Dżemy i galaretki",
+      germanCuisine: "Kuchnia niemiecka",
+      frenchCuisine: "Kuchnia francuska",
+      italianCuisine: "Kuchnia włoska",
+      polishCuisine: "Kuchnia polska",
+      spanishCuisine: "Kuchnia hiszpańska",
+      foodProcessor: "Food Processor",
+      vegan: "Wegańskie",
+      vegetarian: "Wegetariańskie"
+    },
+    accessoryTerms: {
+      blade: "noże",
+      reverse: "obroty w lewo",
+      butterflyWhisk: "motylek",
+      simmeringBasket: "koszyczek do gotowania",
+      steamerAttachment: "nakładka do gotowania na parze",
+      measuringCup: "miarka",
+      spatula: "szpatułka",
+      turbo: "Turbo"
+    },
+    accessoryPhrases: {
+      insertButterflyWhisk: "założyć motylek",
+      insertSimmeringBasket: "zawiesić koszyczek do gotowania",
+      attachSteamerAttachment: "założyć nakładkę do gotowania na parze"
+    }
+  },
+  "de-DE": {
+    locale: "de-DE",
+    outputLanguage: "German as used in Germany",
+    unitConvention: "German recipe conventions: g, kg, EL, TL, Prise, Prisen, Stück; use ml only when grams would be misleading.",
+    servingUnitExamples: "Portionen, Gläser, Stück",
+    categoryLabel: "German site IDs",
+    defaultIngredientGroupName: "Allgemeine Zutaten",
+    categoryLabels: {
+      saucesAndDips: "Saucen & Dips",
+      soupsAndStews: "Suppen & Eintopfgerichte",
+      salads: "Salate",
+      sideDishes: "Beilagen",
+      snacks: "Snacks",
+      mainDishes: "Hauptgerichte",
+      babyFood: "Babynahrung",
+      drinks: "Getraenke",
+      onePotAllInOne: "One-Pot / All-in-One",
+      desserts: "Desserts",
+      baking: "Backen",
+      breakfast: "Fruehstueck",
+      dinner: "Abendessen",
+      starters: "Vorspeisen",
+      jamAndJelly: "Marmelade & Gelee",
+      germanCuisine: "Kueche Deutsch",
+      frenchCuisine: "Kueche Franzoesisch",
+      italianCuisine: "Kueche Italienisch",
+      polishCuisine: "Kueche Polnisch",
+      spanishCuisine: "Kueche Spanisch",
+      foodProcessor: "Food Processor",
+      vegan: "Vegan",
+      vegetarian: "Vegetarisch"
+    },
+    accessoryTerms: {
+      blade: "Messereinsatz",
+      reverse: "Linkslauf",
+      butterflyWhisk: "Rühraufsatz",
+      simmeringBasket: "Kocheinsatz",
+      steamerAttachment: "Dampfgaraufsatz",
+      measuringCup: "Messbecher",
+      spatula: "Spatel",
+      turbo: "Turbo"
+    },
+    accessoryPhrases: {
+      insertButterflyWhisk: "Rühraufsatz einsetzen",
+      insertSimmeringBasket: "Kocheinsatz einhängen",
+      attachSteamerAttachment: "Dampfgaraufsatz aufsetzen"
+    }
+  },
+  "fr-FR": {
+    locale: "fr-FR",
+    outputLanguage: "French",
+    unitConvention: "French recipe conventions: g, kg, ml, c. à c., c. à s., pincée, pièces; use ml only when grams would be misleading.",
+    servingUnitExamples: "portions, bocaux, pièces",
+    categoryLabel: "French site IDs",
+    defaultIngredientGroupName: "Ingrédients",
+    categoryLabels: {
+      saucesAndDips: "Sauces & dips",
+      soupsAndStews: "Soupes & ragoûts",
+      salads: "Salades",
+      sideDishes: "Accompagnements",
+      snacks: "Snacks",
+      mainDishes: "Plats principaux",
+      babyFood: "Alimentation pour bébé",
+      drinks: "Boissons",
+      onePotAllInOne: "One-Pot / Tout-en-un",
+      desserts: "Desserts",
+      baking: "Pâtisserie",
+      breakfast: "Petit déjeuner",
+      dinner: "Dîner",
+      starters: "Entrées",
+      jamAndJelly: "Confitures & gelées",
+      germanCuisine: "Cuisine allemande",
+      frenchCuisine: "Cuisine française",
+      italianCuisine: "Cuisine italienne",
+      polishCuisine: "Cuisine polonaise",
+      spanishCuisine: "Cuisine espagnole",
+      foodProcessor: "Food Processor",
+      vegan: "Végane",
+      vegetarian: "Végétarien"
+    },
+    accessoryTerms: {
+      blade: "bloc couteaux",
+      reverse: "marche inverse",
+      butterflyWhisk: "fouet",
+      simmeringBasket: "panier cuisson",
+      steamerAttachment: "accessoire vapeur",
+      measuringCup: "gobelet doseur",
+      spatula: "spatule",
+      turbo: "Turbo"
+    },
+    accessoryPhrases: {
+      insertButterflyWhisk: "insérer le fouet",
+      insertSimmeringBasket: "accrocher le panier cuisson",
+      attachSteamerAttachment: "mettre en place l'accessoire vapeur"
+    }
+  },
+  "en-US": {
+    locale: "en-US",
+    outputLanguage: "English",
+    unitConvention: "English recipe conventions: g, kg, ml, tsp, tbsp, pinch, pieces; use ml only when grams would be misleading.",
+    servingUnitExamples: "servings, jars, pieces",
+    categoryLabel: "English site IDs",
+    defaultIngredientGroupName: "Ingredients",
+    categoryLabels: {
+      saucesAndDips: "Sauces & Dips",
+      soupsAndStews: "Soups & Stews",
+      salads: "Salads",
+      sideDishes: "Side Dishes",
+      snacks: "Snacks",
+      mainDishes: "Main Dishes",
+      babyFood: "Baby Food",
+      drinks: "Drinks",
+      onePotAllInOne: "One-Pot / All-in-One",
+      desserts: "Desserts",
+      baking: "Baking",
+      breakfast: "Breakfast",
+      dinner: "Dinner",
+      starters: "Starters",
+      jamAndJelly: "Jam & Jelly",
+      germanCuisine: "German Cuisine",
+      frenchCuisine: "French Cuisine",
+      italianCuisine: "Italian Cuisine",
+      polishCuisine: "Polish Cuisine",
+      spanishCuisine: "Spanish Cuisine",
+      foodProcessor: "Food Processor",
+      vegan: "Vegan",
+      vegetarian: "Vegetarian"
+    },
+    accessoryTerms: {
+      blade: "blade insert",
+      reverse: "reverse",
+      butterflyWhisk: "butterfly whisk",
+      simmeringBasket: "simmering basket",
+      steamerAttachment: "steamer attachment",
+      measuringCup: "measuring cup",
+      spatula: "spatula",
+      turbo: "Turbo"
+    },
+    accessoryPhrases: {
+      insertButterflyWhisk: "insert the butterfly whisk",
+      insertSimmeringBasket: "hang the simmering basket",
+      attachSteamerAttachment: "attach the steamer attachment"
+    }
+  },
+  "it-IT": {
+    locale: "it-IT",
+    outputLanguage: "Italian",
+    unitConvention: "Italian recipe conventions: g, kg, ml, cucchiaino, cucchiaio, pizzico, pezzi; use ml only when grams would be misleading.",
+    servingUnitExamples: "porzioni, vasetti, pezzi",
+    categoryLabel: "Italian site IDs",
+    defaultIngredientGroupName: "Ingredienti",
+    categoryLabels: {
+      saucesAndDips: "Salse & salse",
+      soupsAndStews: "Zuppe & stufati",
+      salads: "Insalate",
+      sideDishes: "Contorni",
+      snacks: "Snack",
+      mainDishes: "Piatti principali",
+      babyFood: "Alimenti per bambini",
+      drinks: "Bevande",
+      onePotAllInOne: "One-Pot / Tutto in uno",
+      desserts: "Dessert",
+      baking: "Cottura al forno",
+      breakfast: "Colazione",
+      dinner: "Cena",
+      starters: "Antipasti",
+      jamAndJelly: "Marmellate & gelatine",
+      germanCuisine: "Cucina tedesca",
+      frenchCuisine: "Cucina francese",
+      italianCuisine: "Cucina italiana",
+      polishCuisine: "Cucina polacca",
+      spanishCuisine: "Cucina spagnola",
+      foodProcessor: "Food Processor",
+      vegan: "Vegano",
+      vegetarian: "Vegetariano"
+    },
+    accessoryTerms: {
+      blade: "lama",
+      reverse: "antiorario",
+      butterflyWhisk: "frusta",
+      simmeringBasket: "cestello di cottura",
+      steamerAttachment: "accessorio vapore",
+      measuringCup: "misurino",
+      spatula: "spatola",
+      turbo: "Turbo"
+    },
+    accessoryPhrases: {
+      insertButterflyWhisk: "inserire la frusta",
+      insertSimmeringBasket: "agganciare il cestello di cottura",
+      attachSteamerAttachment: "montare l'accessorio vapore"
+    }
+  }
+};
+
+export function getLocaleText(locale: SupportedLocale = "de-DE"): LocaleText {
+  const text = localeTexts[locale];
+  if (!text) {
+    throw new Error(`No localization is available for locale ${locale}.`);
+  }
+  return text;
+}

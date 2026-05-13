@@ -1,0 +1,80 @@
+{
+  "name": "smart-recipe",
+  "version": "0.1.0",
+  "description": "TypeScript tools for generating and uploading Monsieur Cuisine Smart recipes.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "smart-recipe": "./dist/cli/main.js"
+  },
+  "files": [
+    "dist",
+    "docs",
+    ".env.example",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./catalogs": {
+      "types": "./dist/catalogs/index.d.ts",
+      "import": "./dist/catalogs/index.js"
+    },
+    "./llm": {
+      "types": "./dist/llm/index.d.ts",
+      "import": "./dist/llm/index.js"
+    },
+    "./mc": {
+      "types": "./dist/mc/index.d.ts",
+      "import": "./dist/mc/index.js"
+    },
+    "./recipes": {
+      "types": "./dist/recipes/index.d.ts",
+      "import": "./dist/recipes/index.js"
+    },
+    "./retriever": {
+      "types": "./dist/retriever/index.d.ts",
+      "import": "./dist/retriever/index.js"
+    },
+    "./pipeline": {
+      "types": "./dist/pipeline/index.d.ts",
+      "import": "./dist/pipeline/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.3.3",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "cheerio": "^1.0.0",
+    "commander": "^13.1.0",
+    "defuddle": "^0.6.4",
+    "linkedom": "^0.18.9",
+    "marked": "^15.0.12",
+    "marked-terminal": "^7.3.0",
+    "openai": "^6.37.0",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "playwright": "^1.60.0",
+    "typebox": "^1.0.55"
+  },
+  "devDependencies": {
+    "@types/marked-terminal": "^6.1.1",
+    "@types/node": "^22.13.10",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  },
+  "engines": {
+    "node": ">=20.18"
+  }
+}
