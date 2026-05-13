@@ -22,22 +22,32 @@ SmartRecipe creates drafts. You should still review the ingredients, steps, cook
 
 ## Install
 
-After publishing, install the CLI globally:
+SmartRecipe is not published to the npm registry. You can still install the CLI
+directly from GitHub because npm supports GitHub package specs:
 
 ```bash
-npm install -g smart-recipe
+npm install -g github:gerkensm/smart-recipe
 smart-recipe --help
 ```
+
+To install a specific branch, tag or commit, append `#<ref>`:
+
+```bash
+npm install -g github:gerkensm/smart-recipe#main
+```
+
+This requires Git. During installation, npm runs the package `prepare` script,
+which builds `dist` from the TypeScript sources.
 
 From a local checkout:
 
 ```bash
 npm install
-npm run build
 node dist/cli/main.js --help
 ```
 
-The examples below use `smart-recipe`. When running from a checkout, replace it with `node dist/cli/main.js`.
+The examples below use `smart-recipe`. When running from a checkout, replace it
+with `node dist/cli/main.js`.
 
 ## Set Up OpenAI
 
