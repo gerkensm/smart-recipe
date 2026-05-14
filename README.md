@@ -162,22 +162,70 @@ This opens a small browser window. Log in with your normal Lidl Plus / Monsieur 
 
 After that, imports can reuse the saved session.
 
-### Use a cookie manually
+### If browser login does not work: copy your cookie manually
 
-You can also pass a cookie directly:
+The automated login helper is convenient, but it depends on the current Lidl Plus / Monsieur Cuisine website login flow. If that flow changes, the helper may fail.
 
-```bash
-smart-recipe import-url "https://example.com/recipe" --cookie "..."
+You can always log in manually in your normal browser and copy the session cookie yourself.
+
+#### 1. Open Monsieur Cuisine in your browser
+
+Go to the Monsieur Cuisine recipe website for your region and log in with your Lidl Plus / Monsieur Cuisine account.
+
+For Germany, this is usually:
+
+```text
+https://www.monsieur-cuisine.com/de/
 ```
 
-Or ask SmartRecipe to prompt for it:
+#### 2. Open your browser developer tools
+
+In Chrome, Edge, or another Chromium-based browser:
+
+1. Right-click on the page.
+2. Choose **Inspect**.
+3. Open the **Network** tab.
+4. Reload the page while the Network tab is open.
+5. Click any request to `monsieur-cuisine.com`.
+6. In **Headers**, find **Request Headers**.
+7. Copy the complete value of the `Cookie` header.
+
+It will look roughly like this:
+
+```text
+cookie_name=value; another_cookie=value; ...
+```
+
+Copy the whole line after `Cookie:`. Do not copy only one cookie value.
+
+#### 3. Use the cookie for one command
+
+```bash
+smart-recipe import-url "https://example.com/recipe" --cookie "cookie_name=value; another_cookie=value; ..."
+```
+
+#### 4. Or let SmartRecipe ask for it
 
 ```bash
 smart-recipe import-url "https://example.com/recipe" --prompt-cookie
 ```
 
+#### 5. Or save it in your environment
+
+You can add it to `.env` or `~/.smart-recipe`:
+
+```bash
+MC_COOKIE="cookie_name=value; another_cookie=value; ..."
+```
+
+Then run imports normally:
+
+```bash
+smart-recipe import-url "https://example.com/recipe"
+```
+
 > [!WARNING]
-> Your Monsieur Cuisine cookie acts like a login session. Keep it private. Do not commit `.env`, `~/.smart-recipe`, logs, or pasted cookies to GitHub.
+> Your Monsieur Cuisine cookie acts like a login session. Keep it private. Do not commit `.env`, `~/.smart-recipe`, logs, screenshots, terminal history, or pasted cookies to GitHub. If you accidentally share it, log out of Monsieur Cuisine / Lidl Plus and log back in to invalidate the old session.
 
 ---
 
