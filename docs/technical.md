@@ -86,3 +86,18 @@ Before publishing, inspect the package contents:
 ```bash
 npm pack --dry-run
 ```
+
+## Regenerating the README Previews
+
+`docs/terminal-preview.svg` and `docs/wizard-preview.svg` are static SVGs generated using `ansi-to-svg`. Regenerate them after changing `src/recipes/printer.ts` or the script itself:
+
+```bash
+# Pull ansi-to-svg into a temporary directory (not saved as a project dep)
+mkdir -p /tmp/svg-gen && cd /tmp/svg-gen && npm init -y -q > /dev/null && npm install ansi-to-svg -q
+cd -   # back to project root
+
+# Generate both SVGs
+NODE_PATH=/tmp/svg-gen/node_modules npx tsx scratch_generate_terminal_svg.ts
+```
+
+Commit `docs/terminal-preview.svg` and `docs/wizard-preview.svg` alongside any printer or wizard CLI changes.

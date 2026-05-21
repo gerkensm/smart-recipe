@@ -29,9 +29,13 @@ It will:
 6. If you do: guide you through authentication (browser login or cookie paste) and offer to save the session.
 7. Upload a recipe image from the page, or create a new one with OpenAI.
 
+![SmartRecipe interactive setup and upload wizard](docs/wizard-preview.svg)
+
 The result is not just copied text. SmartRecipe tries to turn the recipe into a device-native cooking flow with structured ingredients, steps, timings, temperatures, speeds, rotation direction, scale steps, kneading, steaming, roasting, slow cooking, and other Smart modes where appropriate.
 
 You still stay in control: SmartRecipe creates **drafts**, not final recipes. Review everything before cooking.
+
+![SmartRecipe terminal output — Tuscan Duck Ragù with Pici](docs/terminal-preview.svg)
 
 ---
 
