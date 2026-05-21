@@ -21,7 +21,8 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
       model: options.model ?? process.env.OPENAI_MODEL ?? "gpt-5.5",
       reasoningEffort: options.reasoningEffort ?? (process.env.OPENAI_REASONING_EFFORT as any) ?? "medium",
       locale: options.locale ?? "de-DE",
-      maxCorrectionAttempts: options.maxCorrectionAttempts ?? 3
+      maxCorrectionAttempts: options.maxCorrectionAttempts ?? 3,
+      excludeModes: options.excludeModes ?? []
     };
   }
 
@@ -32,11 +33,13 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
     for (let attempt = 0; attempt <= finalOptions.maxCorrectionAttempts; attempt += 1) {
       const output = await this.generateOnce(page, finalOptions, feedback);
       const validation = validateRecipeInput(output);
-      if (validation.ok) {
+      const excludedErrors = validateExcludedModes(output, finalOptions.excludeModes);
+      const allErrors = [...validation.errors, ...excludedErrors];
+      if (validation.ok && excludedErrors.length === 0) {
         assertRecipeInput(output);
         return normalizeRecipeInput(output);
       }
-      feedback = { errors: validation.errors, previous: output };
+      feedback = { errors: allErrors, previous: output };
     }
 
     throw new Error(`OpenAI output failed validation after ${finalOptions.maxCorrectionAttempts} correction attempts:\n${feedback?.errors.join("\n")}`);
@@ -74,7 +77,7 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
           schema: strictSchema
         }
       },
-      instructions: buildRecipeInstructions(options.locale),
+      instructions: buildRecipeInstructions(options.locale, options.excludeModes),
       input: [
         {
           role: "user",
@@ -109,4 +112,22 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
 
     return JSON.parse(response.output_text);
   }
+}
+
+/**
+ * Checks that none of the recipe steps use a mode that was excluded for this generation run.
+ * Returns an array of human-readable error strings suitable for feeding back to the LLM.
+ */
+function validateExcludedModes(output: unknown, excludeModes: string[]): string[] {
+  if (!excludeModes.length || typeof output !== "object" || !output) return [];
+  const excluded = new Set(excludeModes);
+  const errors: string[] = [];
+  const steps: unknown[] = (output as any)?.servingSize?.steps ?? [];
+  steps.forEach((step: any, index: number) => {
+    const modeType = step?.mode?.type;
+    if (modeType && excluded.has(modeType)) {
+      errors.push(`/servingSize/steps/${index}/mode/type must not be "${modeType}" — this mode requires an accessory the user does not own. Replace it with an alternative mode or type "none".`);
+    }
+  });
+  return errors;
 }

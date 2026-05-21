@@ -58,6 +58,7 @@ program
   .option("--image-quality <quality>", "Generated image quality: low, medium, high, auto", process.env.OPENAI_IMAGE_QUALITY ?? "medium")
   .option("--cookie <cookie>", "Monsieur Cuisine/Lidl Plus browser Cookie header")
   .option("--prompt-cookie", "Ask for a browser Cookie header if MC_COOKIE is not set")
+  .option("--exclude-modes <modes>", "Comma-separated list of Smart modes to exclude (e.g. foodProcessor)")
 
   .action(async (url, options) => {
     const logger = createLogger({
@@ -82,6 +83,7 @@ program
       fullResponse: options.fullResponse,
       openAIModel: options.model,
       reasoningEffort: options.reasoning as ReasoningEffort,
+      excludeModes: options.excludeModes ? options.excludeModes.split(",").map((m: string) => m.trim()) : undefined,
       cookie: options.cookie ?? process.env.MC_COOKIE,
       authProvider,
       imageProvider,

@@ -24,7 +24,7 @@ export const plannedLocales: readonly PlannedLocale[] = [
 
 export const supportedLocales: readonly SupportedLocale[] = ["cs-CZ", "pl-PL", "de-DE", "fr-FR", "en-US", "it-IT"];
 
-const categoryMeta: Record<CategoryKey, { id: number; order: number; description: string }> = {
+export const categoryMeta: Record<CategoryKey, { id: number; order: number; description: string }> = {
   saucesAndDips: { id: 220, order: 1, description: "Sauces, dressings, dips, pestos and spreads." },
   soupsAndStews: { id: 228, order: 2, description: "Soups, broths, stews and other warm one-bowl dishes." },
   salads: { id: 236, order: 3, description: "Cold or warm salads." },
@@ -61,7 +61,7 @@ const localeLanguage: Record<SupportedLocale, LocaleLanguage> = {
   "it-IT": "it"
 };
 
-const localeComplexityIds: Record<SupportedLocale, Record<Complexity, number>> = {
+export const localeComplexityIds: Record<SupportedLocale, Record<Complexity, number>> = {
   "cs-CZ": { easy: 537, medium: 536, hard: 538 },
   "pl-PL": { easy: 159, medium: 102, hard: 106 },
   "de-DE": { easy: 142, medium: 99, hard: 104 },
@@ -115,27 +115,10 @@ export function getCatalog(locale: string = "de-DE"): LocaleCatalog {
   return catalog;
 }
 
-export function resolveCategoryIds(categoryKeys: readonly CategoryKey[] = [], locale = "de-DE"): number[] {
-  const catalog = getCatalog(locale);
-  const seen = new Set<number>();
-  return categoryKeys
-    .map((key) => catalog.categories[key]?.id)
-    .filter((id): id is number => typeof id === "number")
-    .filter((id) => {
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
-}
-
-export function resolveComplexityId(complexity: Complexity = "easy", locale = "de-DE"): number {
-  return getCatalog(locale).complexityIds[complexity];
-}
-
 export function categoryPromptText(locale = "de-DE"): string {
   const catalog = getCatalog(locale);
   return Object.values(catalog.categories)
     .sort((a, b) => a.order - b.order || a.id - b.id)
-    .map((category) => `- ${category.key}: ${category.label} (site id ${category.id}) - ${category.description}`)
+    .map((category) => `- ${category.id}: ${category.label} (${category.key}) - ${category.description}`)
     .join("\n");
 }

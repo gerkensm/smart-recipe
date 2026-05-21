@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getCatalog, resolveCategoryIds } from "../src/catalogs/index.js";
+import { getCatalog } from "../src/catalogs/index.js";
 import { createRecipeUrl } from "../src/mc/urls.js";
 import { createSmartRecipePayload } from "../src/recipes/payload.js";
 import type { CreateSmartRecipePayloadOptions } from "../src/recipes/payload.js";
@@ -8,9 +8,11 @@ import { validateRecipeInput } from "../src/recipes/validation.js";
 const recipeInput: CreateSmartRecipePayloadOptions = {
   title: "Tomatensauce",
   description: "Eine einfache Sauce.",
-  locale: "de-DE" as const,
-  complexity: "easy" as const,
-  categoryKeys: ["saucesAndDips" as const, "vegan" as const],
+  settings: {
+    locale: "de-DE" as const,
+    complexityId: 142
+  },
+  categoryIds: [220, 579],
   nutrients: [
     { name: "calories" as const, unit: "kCal", amount: 120 },
     { name: "carbohydrate" as const, unit: "g", amount: 10 },
@@ -40,13 +42,17 @@ const recipeInput: CreateSmartRecipePayloadOptions = {
 };
 
 describe("Smart recipe payloads", () => {
-  it("maps semantic category keys to observed category ids", () => {
-    expect(resolveCategoryIds(["saucesAndDips", "vegan"], "de-DE")).toEqual([220, 579]);
+  it("contains correct category ids in de-DE catalog", () => {
+    const catalog = getCatalog("de-DE");
+    expect(catalog.categories.saucesAndDips.id).toBe(220);
+    expect(catalog.categories.vegan.id).toBe(579);
   });
 
-  it("reuses the same observed category ids for English recipes", () => {
-    expect(resolveCategoryIds(["mainDishes", "vegetarian"], "en-US")).toEqual([260, 588]);
-    expect(getCatalog("en-US").categories.mainDishes.label).toBe("Main Dishes");
+  it("contains correct category ids in en-US catalog", () => {
+    const catalog = getCatalog("en-US");
+    expect(catalog.categories.mainDishes.id).toBe(260);
+    expect(catalog.categories.vegetarian.id).toBe(588);
+    expect(catalog.categories.mainDishes.label).toBe("Main Dishes");
   });
 
   it("builds locale-specific create-recipe URLs", () => {
@@ -67,7 +73,10 @@ describe("Smart recipe payloads", () => {
   it("uses localized default ingredient group names", () => {
     const payload = createSmartRecipePayload({
       ...recipeInput,
-      locale: "en-US",
+      settings: {
+        locale: "en-US",
+        complexityId: 22
+      },
       servingSize: {
         ...recipeInput.servingSize,
         ingredientGroups: [{ ingredients: [{ name: "Tomatoes", amount: 400, unit: "g", isOptional: false }] }]

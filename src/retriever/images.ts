@@ -74,8 +74,10 @@ export async function hydrateImages(
     try {
       const response = await fetchImpl(image.url, { headers: { "User-Agent": "Mozilla/5.0" } });
       if (!response.ok) continue;
-      const contentType = response.headers.get("content-type") ?? image.contentType;
-      if (!contentType.startsWith("image/")) continue;
+      // Strip parameters (e.g. "; charset=utf-8" or ";q=0.9") and normalise to bare MIME type.
+      const rawContentType = response.headers.get("content-type") ?? image.contentType;
+      const contentType = rawContentType.split(";")[0].trim();
+      if (!RETRIEVER_SUPPORTED_IMAGE_TYPES.has(contentType)) continue;
       const bytes = new Uint8Array(await response.arrayBuffer());
       if (bytes.byteLength > maxBytes) continue;
       const dataUrl = `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
@@ -86,6 +88,9 @@ export async function hydrateImages(
   }
   return hydrated;
 }
+
+/** Image MIME types accepted by the OpenAI responses API for vision inputs. */
+const RETRIEVER_SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
 function normalizeImageUrl(url: string, pageUrl: string): string | null {
   const first = url.split(",")[0]?.trim().split(/\s+/)[0];

@@ -1,5 +1,7 @@
-import type { CategoryKey, Complexity, SupportedLocale } from "../catalogs/types.js";
+import type { SupportedLocale } from "../catalogs/types.js";
 import type { RecipeInput } from "./schema.js";
+
+export type { SmartRecipePayload } from "./schema.js";
 
 export interface Nutrient {
   name: "calories" | "carbohydrate" | "fat" | "protein";
@@ -41,26 +43,12 @@ export interface RecipeServingSizeInput {
 export interface SmartRecipeInput {
   title: string;
   description?: string;
-  locale?: SupportedLocale;
+  settings: {
+    locale: SupportedLocale;
+    complexityId: number;
+  };
   status?: "draft" | "private-publish";
-  complexity?: Complexity;
-  categoryKeys?: CategoryKey[];
+  categoryIds?: number[];
   nutrients?: Nutrient[];
   servingSize: RecipeServingSizeInput;
-}
-
-export interface SmartRecipePayload {
-  status: "draft" | "private-publish";
-  source: "member";
-  languageLocale: SupportedLocale;
-  deviceTypeIds: [13];
-  title: string;
-  description: string;
-  thumbnail: { portraitMediaId: number | null; landscapeMediaId: number | null };
-  detailsImage: { portraitMediaId: number | null; landscapeMediaId: number | null };
-  complexityId: number;
-  allowSocialSharing: false;
-  categoryIds: number[];
-  nutrients: Nutrient[];
-  servingSizes: unknown[];
 }

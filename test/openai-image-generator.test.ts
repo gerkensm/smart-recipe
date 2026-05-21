@@ -38,9 +38,11 @@ describe("OpenAIRecipeImageGenerator", () => {
 const recipeFixture = {
   title: "Tomato Soup",
   description: "A bright soup with roasted tomatoes.",
-  locale: "en-US",
-  complexity: "easy",
-  categoryKeys: [],
+  settings: {
+    locale: "en-US",
+    complexityId: 22
+  },
+  categoryIds: [],
   nutrients: [
     { name: "calories", unit: "kCal", amount: 180 },
     { name: "carbohydrate", unit: "g", amount: 20 },

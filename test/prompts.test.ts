@@ -7,17 +7,17 @@ describe("LLM prompt guidance", () => {
   it("uses the requested locale instead of hardcoded prose", () => {
     const prompt = buildRecipeInstructions("de-DE");
 
-    expect(prompt).toContain("set locale to de-DE");
+    expect(prompt).toContain("set settings.locale to de-DE");
     expect(prompt).toContain("German as used in Germany");
-    expect(prompt).toContain("Category keys and German site IDs");
+    expect(prompt).toContain("Category IDs and German site IDs");
   });
 
   it("supports the English locale guidance", () => {
     const prompt = buildRecipeInstructions("en-US");
 
-    expect(prompt).toContain("set locale to en-US");
+    expect(prompt).toContain("set settings.locale to en-US");
     expect(prompt).toContain("English");
-    expect(prompt).toContain("Category keys and English site IDs");
+    expect(prompt).toContain("Category IDs and English site IDs");
   });
 
   it("includes accessory and hardware rules with de-DE device terms", () => {
@@ -26,7 +26,7 @@ describe("LLM prompt guidance", () => {
     expect(rules).toContain("Messereinsatz");
     expect(rules).toContain("Linkslauf");
     expect(rules).toContain("Rühraufsatz einsetzen");
-    expect(rules).toContain("Kocheinsatz einhängen");
+    expect(rules).toContain("Kocheinsatz");
     expect(rules).toContain("Dampfgaraufsatz aufsetzen");
     expect(rules).toContain("hotter than 60 C");
   });
@@ -45,9 +45,11 @@ describe("LLM prompt guidance", () => {
 const recipeFixture = {
   title: "Tomato Soup",
   description: "A bright soup with roasted tomatoes.",
-  locale: "en-US",
-  complexity: "easy",
-  categoryKeys: [],
+  settings: {
+    locale: "en-US",
+    complexityId: 22
+  },
+  categoryIds: [],
   nutrients: [
     { name: "calories", unit: "kCal", amount: 180 },
     { name: "carbohydrate", unit: "g", amount: 20 },

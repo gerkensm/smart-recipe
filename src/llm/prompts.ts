@@ -3,21 +3,25 @@ import type { SupportedLocale } from "../catalogs/types.js";
 import { SMART_MODE_GUIDE } from "../recipes/constants.js";
 import type { RecipeInput } from "../recipes/schema.js";
 import type { RetrievedRecipePage } from "../retriever/types.js";
+import type { PromptModeType } from "../recipes/types.js";
 import { getLocalePromptGuidance } from "./locale-guidance.js";
 
-export function buildRecipeInstructions(locale: SupportedLocale = "de-DE"): string {
+export function buildRecipeInstructions(locale: SupportedLocale = "de-DE", excludeModes: PromptModeType[] = []): string {
   const localeGuidance = getLocalePromptGuidance(locale);
 
   return [
     "Convert recipe page content into the provided Monsieur Cuisine Smart recipe input JSON.",
-    "Target only Monsieur Cuisine Smart (MC3.0). Make use of the Smart's capabilities as much as possible: weighing, manual cooking, roasting, steaming, Smart dough modes, sous-vide, slow cooking, egg cooking, precleaning, fermentation, rice cooking, food processor, puree, smoothie and turbo. Try to make the recipe as automatic as possible while keeping it realistic.",
+    buildCapabilityLine(excludeModes),
+    excludeModes.length > 0
+      ? `IMPORTANT: The following modes are NOT available because the user does not own the required accessories. Do NOT use them under any circumstances: ${excludeModes.join(", ")}.`
+      : "",
     "You may adjust the order of steps or simplify steps so they can be performed with the machine if this does not materially change the final dish. Transform the recipe into a Monsieur-Cuisine-native recipe with as few manual steps as practical.",
     "Avoid workflows that require the user to repeatedly empty the pot unless the source recipe truly requires it. For each step, supply a title.",
     "WORKFLOW LOGIC: While you should avoid unnecessarily emptying the pot, you MUST empty and clean it if a subsequent step physically requires a cold, clean, or dry jug (e.g., whipping egg whites, whipping cream, or grinding dry spices after a wet cooking step). Do not combine hot and cold steps improperly.",
     "STRICT CAPACITY LIMIT: The jug holds a maximum of 3 liters (approx. 3000 g). You MUST mentally calculate the cumulative weight and volume of all ingredients currently in the jug at every step. If the total exceeds 3000 g/ml at any point, you MUST scale down the entire recipe proportionally from the very beginning to ensure safe cooking without overflowing.",
     "APPLY CULINARY LOGIC: Do not force machine actions that ruin the dish's texture. For example, avoid continuous stirring for dishes that traditionally require undisturbed resting or crust formation (like Paella). Adapt the workflow to make logical sense for a food processor.",
     "DOUGH LIMIT: While the jug holds 3 liters, the motor cannot knead 3 kg of solid dough. For heavy doughs (bread, pizza) using 'solidDoughKnead', the absolute maximum limit is 1000 g of flour (approx. 1600 g total dough weight). If the source recipe exceeds this, you MUST scale it down.",
-    `Use ${localeGuidance.outputLanguage} for every user-facing recipe field and set locale to ${localeGuidance.locale}. Translate where necessary.`,
+    `Use ${localeGuidance.outputLanguage} for every user-facing recipe field and set settings.locale to ${localeGuidance.locale}. Translate where necessary.`,
     `Convert units to ${localeGuidance.unitConvention}`,
     "IMPORTANT: Convert liquid measurements (ml, l) to weight in grams (g) for ingredients wherever it makes sense (for example, 1 ml water-like liquid = 1 g). Use separate scale steps for each ingredient unless this would make the recipe worse. Update the corresponding steps to reflect weighing the liquids.",
     "In the descriptions of steps requiring the user to add ingredients to the pot, specify the quantity of the ingredient to add so the user does not have to consult the ingredients list again.",
@@ -31,12 +35,42 @@ export function buildRecipeInstructions(locale: SupportedLocale = "de-DE"): stri
     "Accessory and hardware rules:",
     accessoryHardwareRules(locale),
     "",
-    `Category keys and ${localeGuidance.categoryLabel}:`,
+    `Category IDs and ${localeGuidance.categoryLabel}:`,
     categoryPromptText(locale),
     "",
     "Smart mode constraints:",
-    schemaHintsForModes()
-  ].join("\n");
+    schemaHintsForModes(excludeModes)
+  ].filter(Boolean).join("\n");
+}
+
+const ALL_CAPABILITIES = "weighing, manual cooking, roasting, steaming, Smart dough modes, sous-vide, slow cooking, egg cooking, precleaning, fermentation, rice cooking, food processor, puree, smoothie and turbo";
+
+const MODE_CAPABILITY_LABELS: Partial<Record<PromptModeType, string>> = {
+  foodProcessor: "food processor",
+  scale: "weighing",
+  turbo: "turbo",
+  puree: "puree",
+  smoothie: "smoothie",
+  steam: "steaming",
+  sousVide: "sous-vide",
+  slowCooking: "slow cooking",
+  cookingEggs: "egg cooking",
+  fermentation: "fermentation",
+  riceCooking: "rice cooking",
+  roast: "roasting",
+  solidDoughKnead: "Smart dough modes",
+  softDoughKnead: "Smart dough modes",
+  liquidDoughKnead: "Smart dough modes",
+  manualCooking: "manual cooking"
+};
+
+function buildCapabilityLine(excludeModes: PromptModeType[]): string {
+  if (excludeModes.length === 0) {
+    return `Target only Monsieur Cuisine Smart (MC3.0). Make use of the Smart's capabilities as much as possible: ${ALL_CAPABILITIES}. Try to make the recipe as automatic as possible while keeping it realistic.`;
+  }
+  const excludedLabels = new Set(excludeModes.flatMap((m) => MODE_CAPABILITY_LABELS[m] ? [MODE_CAPABILITY_LABELS[m]!] : []));
+  const remaining = ALL_CAPABILITIES.split(", ").filter((cap) => !excludedLabels.has(cap)).join(", ");
+  return `Target only Monsieur Cuisine Smart (MC3.0). Make use of the Smart's capabilities as much as possible: ${remaining}. Try to make the recipe as automatic as possible while keeping it realistic.`;
 }
 
 export function accessoryHardwareRules(locale: SupportedLocale = "de-DE"): string {
@@ -51,25 +85,26 @@ export function accessoryHardwareRules(locale: SupportedLocale = "de-DE"): strin
   ].join("\n");
 }
 
-export function schemaHintsForModes(): string {
+export function schemaHintsForModes(excludeModes: PromptModeType[] = []): string {
+  const excluded = new Set(excludeModes);
   return [
-    `manualCooking: temperature steps ${SMART_MODE_GUIDE.manualCooking.temperature.steps.join(", ")} C; time 1-5940 s; speed 0-10, but max 3 when temperature > 0; rotationDirection left/right. Use speed 0 if the dish requires simmering without being stirred to pieces.`,
-    "turbo: 1-20 s. Do not use when contents are hotter than 60 C, with more than 2.5 l liquid, or while the butterfly whisk is inserted.",
-    "scale: 5-5000 g.",
-    `roast: temperature steps ${SMART_MODE_GUIDE.roast.temperature.steps.join(", ")} C; time 0-840 s.`,
-    "solidDoughKnead and softDoughKnead: 45-240 s.",
-    "liquidDoughKnead: 45-360 s.",
-    "steam: 0-3600 s.",
-    "sousVide: 40-85 C; 15-720 min.",
-    `slowCooking: temperature steps ${SMART_MODE_GUIDE.slowCooking.temperature.steps.join(", ")} C; 15-480 min.`,
-    "cookingEggs: size small/medium/large; texture soft/waxy_soft/hard. Use waxy_soft for medium/soft-boiled.",
-    "precleaning: duration short or long.",
-    `fermentation: temperature steps ${SMART_MODE_GUIDE.fermentation.temperature.steps.join(", ")} C; 30-720 min.`,
-    "riceCooking: 1200-2400 s.",
-    "foodProcessor: 1-300 s.",
-    "puree and smoothie: 30-120 s.",
+    !excluded.has("manualCooking") && `manualCooking: temperature steps ${SMART_MODE_GUIDE.manualCooking.temperature.steps.join(", ")} C; time 1-5940 s; speed 0-10, but max 3 when temperature > 0; rotationDirection left/right. Use speed 0 if the dish requires simmering without being stirred to pieces.`,
+    !excluded.has("turbo") && "turbo: 1-20 s. Do not use when contents are hotter than 60 C, with more than 2.5 l liquid, or while the butterfly whisk is inserted.",
+    !excluded.has("scale") && "scale: 5-5000 g.",
+    !excluded.has("roast") && `roast: temperature steps ${SMART_MODE_GUIDE.roast.temperature.steps.join(", ")} C; time 0-840 s.`,
+    (!excluded.has("solidDoughKnead") || !excluded.has("softDoughKnead")) && "solidDoughKnead and softDoughKnead: 45-240 s.",
+    !excluded.has("liquidDoughKnead") && "liquidDoughKnead: 45-360 s.",
+    !excluded.has("steam") && "steam: 0-3600 s.",
+    !excluded.has("sousVide") && "sousVide: 40-85 C; 15-720 min.",
+    !excluded.has("slowCooking") && `slowCooking: temperature steps ${SMART_MODE_GUIDE.slowCooking.temperature.steps.join(", ")} C; 15-480 min.`,
+    !excluded.has("cookingEggs") && "cookingEggs: size small/medium/large; texture soft/waxy_soft/hard. Use waxy_soft for medium/soft-boiled.",
+    !excluded.has("precleaning") && "precleaning: duration short or long.",
+    !excluded.has("fermentation") && `fermentation: temperature steps ${SMART_MODE_GUIDE.fermentation.temperature.steps.join(", ")} C; 30-720 min.`,
+    !excluded.has("riceCooking") && "riceCooking: 1200-2400 s.",
+    !excluded.has("foodProcessor") && "foodProcessor: 1-300 s.",
+    (!excluded.has("puree") || !excluded.has("smoothie")) && "puree and smoothie: 30-120 s.",
     "Use mode type none for plain human-only instructions."
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 export function buildRecipeImagePrompt(page: RetrievedRecipePage, recipe: RecipeInput): string {

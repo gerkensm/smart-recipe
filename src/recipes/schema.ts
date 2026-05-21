@@ -1,5 +1,5 @@
 import Type, { type Static } from "typebox";
-import { categoryKeys } from "../catalogs/catalogs.js";
+import { categoryMeta, localeComplexityIds } from "../catalogs/catalogs.js";
 import {
   SMART_FERMENTATION_TEMPERATURE_STEPS,
   SMART_HEATING_TEMPERATURE_STEPS,
@@ -223,6 +223,140 @@ const RecipeStepModeSchema = Type.Union(
   }
 );
 
+const LocalizedSettingsSchema = Type.Union([
+  Type.Object({
+    locale: Type.Literal("cs-CZ"),
+    complexityId: Type.Union([
+      Type.Literal(localeComplexityIds["cs-CZ"].easy),
+      Type.Literal(localeComplexityIds["cs-CZ"].medium),
+      Type.Literal(localeComplexityIds["cs-CZ"].hard)
+    ], { description: `Czech complexity: ${localeComplexityIds["cs-CZ"].easy} (easy), ${localeComplexityIds["cs-CZ"].medium} (medium), ${localeComplexityIds["cs-CZ"].hard} (hard)` })
+  }, { additionalProperties: false }),
+  Type.Object({
+    locale: Type.Literal("pl-PL"),
+    complexityId: Type.Union([
+      Type.Literal(localeComplexityIds["pl-PL"].easy),
+      Type.Literal(localeComplexityIds["pl-PL"].medium),
+      Type.Literal(localeComplexityIds["pl-PL"].hard)
+    ], { description: `Polish complexity: ${localeComplexityIds["pl-PL"].easy} (easy), ${localeComplexityIds["pl-PL"].medium} (medium), ${localeComplexityIds["pl-PL"].hard} (hard)` })
+  }, { additionalProperties: false }),
+  Type.Object({
+    locale: Type.Literal("de-DE"),
+    complexityId: Type.Union([
+      Type.Literal(localeComplexityIds["de-DE"].easy),
+      Type.Literal(localeComplexityIds["de-DE"].medium),
+      Type.Literal(localeComplexityIds["de-DE"].hard)
+    ], { description: `German complexity: ${localeComplexityIds["de-DE"].easy} (easy), ${localeComplexityIds["de-DE"].medium} (medium), ${localeComplexityIds["de-DE"].hard} (hard)` })
+  }, { additionalProperties: false }),
+  Type.Object({
+    locale: Type.Literal("fr-FR"),
+    complexityId: Type.Union([
+      Type.Literal(localeComplexityIds["fr-FR"].easy),
+      Type.Literal(localeComplexityIds["fr-FR"].medium),
+      Type.Literal(localeComplexityIds["fr-FR"].hard)
+    ], { description: `French complexity: ${localeComplexityIds["fr-FR"].easy} (easy), ${localeComplexityIds["fr-FR"].medium} (medium), ${localeComplexityIds["fr-FR"].hard} (hard)` })
+  }, { additionalProperties: false }),
+  Type.Object({
+    locale: Type.Literal("en-US"),
+    complexityId: Type.Union([
+      Type.Literal(localeComplexityIds["en-US"].easy),
+      Type.Literal(localeComplexityIds["en-US"].medium),
+      Type.Literal(localeComplexityIds["en-US"].hard)
+    ], { description: `English complexity: ${localeComplexityIds["en-US"].easy} (easy), ${localeComplexityIds["en-US"].medium} (medium), ${localeComplexityIds["en-US"].hard} (hard)` })
+  }, { additionalProperties: false }),
+  Type.Object({
+    locale: Type.Literal("it-IT"),
+    complexityId: Type.Union([
+      Type.Literal(localeComplexityIds["it-IT"].easy),
+      Type.Literal(localeComplexityIds["it-IT"].medium),
+      Type.Literal(localeComplexityIds["it-IT"].hard)
+    ], { description: `Italian complexity: ${localeComplexityIds["it-IT"].easy} (easy), ${localeComplexityIds["it-IT"].medium} (medium), ${localeComplexityIds["it-IT"].hard} (hard)` })
+  }, { additionalProperties: false })
+], {
+  description: "Settings object containing target locale and complexity ID."
+});
+
+/**
+ * Supported locales for Monsieur Cuisine Smart recipe generation.
+ */
+export const SupportedLocaleSchema = Type.Union([
+  Type.Literal("cs-CZ"),
+  Type.Literal("pl-PL"),
+  Type.Literal("de-DE"),
+  Type.Literal("fr-FR"),
+  Type.Literal("en-US"),
+  Type.Literal("it-IT")
+]);
+
+/**
+ * Shared sub-schema for recipe nutrient information.
+ */
+export const NutrientSchema = Type.Object(
+  {
+    name: Type.Union([
+      Type.Literal("calories"),
+      Type.Literal("carbohydrate"),
+      Type.Literal("fat"),
+      Type.Literal("protein")
+    ]),
+    unit: Type.String({ description: "Use kCal for calories and g for carbohydrate, fat and protein." }),
+    amount: Type.Integer({
+      minimum: 0,
+      description: "Monsieur Cuisine requires nutrient amounts as whole integer numbers. Round sensible estimates."
+    })
+  },
+  { additionalProperties: false, description: "Shared schema for recipe nutrient information." }
+);
+
+/**
+ * Shared sub-schema for individual recipe ingredients.
+ */
+export const RecipeIngredientSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1, maxLength: 120 }),
+    amount: Type.Union([Type.String(), Type.Number()], {
+      description: "Ingredient amount. Fractions and ranges may be strings."
+    }),
+    unit: Type.String({ maxLength: 30, description: "Ingredient unit in the target locale. Prefer g and kg for weighable ingredients; use localized spoon, pinch, piece or volume units only when they are clearer." }),
+    isOptional: Type.Boolean({ description: "True only when the ingredient is explicitly optional." })
+  },
+  { additionalProperties: false, description: "Shared schema for recipe ingredient items." }
+);
+
+/**
+ * Shared sub-schema for groups of ingredients (e.g. 'For the dough').
+ */
+export const RecipeIngredientGroupSchema = Type.Object(
+  {
+    name: Type.String({ maxLength: 80 }),
+    ingredients: Type.Array(RecipeIngredientSchema, { minItems: 1 })
+  },
+  { additionalProperties: false, description: "Shared schema for grouped ingredients." }
+);
+
+/**
+ * ============================================================================
+ * DUAL-SCHEMA ARCHITECTURE
+ * ============================================================================
+ * 
+ * To ensure high-quality recipe generation and robust execution, this application
+ * uses two distinct JSON schemas representing validation boundaries at different levels:
+ * 
+ * 1. Model-Optimized Input Schema (RecipeInputSchema):
+ *    - Designed specifically for LLM Structured Outputs (OpenAI Strict Mode).
+ *    - Flattened, simplified, and excludes platform-specific boilerplate.
+ *    - Optimizes token usage, prevents structure/syntax mistakes by the model, 
+ *      and makes validation feedback straightforward for auto-correction loops.
+ * 
+ * 2. API-Optimized Payload Schema (SmartRecipePayloadSchema):
+ *    - Mirrors the exact, database-ready JSON format consumed by the Monsieur Cuisine API.
+ *    - Enforces technical constraints like exact hardware IDs (deviceTypeIds: [13]),
+ *      tuple arrays, order indices, stringified numbers, and specific nested shapes.
+ * 
+ * Utilizing both schemas ensures type-safety at the generation boundary (validating 
+ * model outputs) and the transmission boundary (validating payloads before sending them).
+ */
+
 export const RecipeInputSchema = Type.Object(
   {
     title: Type.String({
@@ -234,50 +368,24 @@ export const RecipeInputSchema = Type.Object(
       maxLength: 2000,
       description: "Original, paraphrased recipe description. This can be more verbose than step text."
     }),
-    locale: Type.Union(
-      [
-        Type.Literal("cs-CZ"),
-        Type.Literal("pl-PL"),
-        Type.Literal("de-DE"),
-        Type.Literal("fr-FR"),
-        Type.Literal("en-US"),
-        Type.Literal("it-IT")
-      ],
-      {
-        description:
-          "Target locale. Use the locale that matches the recipe language. The package currently bundles verified Smart catalogs for cs-CZ, pl-PL, de-DE, fr-FR, en-US and it-IT."
-      }
-    ),
+    settings: LocalizedSettingsSchema,
     status: Type.Optional(Type.Union([Type.Literal("draft"), Type.Literal("private-publish")], {
       description: "Draft is safest for generated recipes."
     })),
-    complexity: Type.Union([Type.Literal("easy"), Type.Literal("medium"), Type.Literal("hard")], {
-      description: "Difficulty level mapped to the locale-specific Monsieur Cuisine complexity id."
-    }),
-    categoryKeys: Type.Array(Type.Union(categoryKeys.map((key) => Type.Literal(key))), {
-      description: `Semantic category keys. The library maps these to locale-specific Monsieur Cuisine category ids. Available keys: ${categoryKeys.join(", ")}. Locale-specific ids and labels are included in prompt hints.`,
-      minItems: 0,
-      maxItems: 8
-    }),
-    nutrients: Type.Array(
-      Type.Object(
-        {
-          name: Type.Union([
-            Type.Literal("calories"),
-            Type.Literal("carbohydrate"),
-            Type.Literal("fat"),
-            Type.Literal("protein")
-          ]),
-          unit: Type.String({ description: "Use kCal for calories and g for carbohydrate, fat and protein." }),
-          amount: Type.Integer({
-            minimum: 0,
-            description: "Monsieur Cuisine requires nutrient amounts as whole integer numbers. Round sensible estimates."
-          })
-        },
-        { additionalProperties: false }
-      ),
-      { description: "Estimated nutrients per serving. Make a reasonable estimate when the source omits them." }
+    categoryIds: Type.Array(
+      Type.Union(Object.values(categoryMeta).map((meta) => Type.Literal(meta.id))),
+      {
+        description: `Category IDs. Available categories: ${Object.entries(categoryMeta)
+          .map(([key, meta]) => `${meta.id} (${key}: ${meta.description})`)
+          .join(", ")}.`,
+        minItems: 0,
+        maxItems: 8,
+        uniqueItems: true
+      }
     ),
+    nutrients: Type.Array(NutrientSchema, {
+      description: "Estimated nutrients per serving. Make a reasonable estimate when the source omits them."
+    }),
     servingSize: Type.Object(
       {
         amount: Type.Integer({ minimum: 1, maximum: 24, description: "Number of servings or units." }),
@@ -285,29 +393,7 @@ export const RecipeInputSchema = Type.Object(
         instruction: Type.String({ maxLength: 240, description: "Optional serving-size note." }),
         preparationTime: Type.Integer({ minimum: 1, maximum: 1440, description: "Hands-on preparation time in minutes." }),
         readyInTime: Type.Integer({ minimum: 1, maximum: 2880, description: "Total time until ready, in minutes." }),
-        ingredientGroups: Type.Array(
-          Type.Object(
-            {
-              name: Type.String({ maxLength: 80 }),
-              ingredients: Type.Array(
-                Type.Object(
-                  {
-                    name: Type.String({ minLength: 1, maxLength: 120 }),
-                    amount: Type.Union([Type.String(), Type.Number()], {
-                      description: "Ingredient amount. Fractions and ranges may be strings."
-                    }),
-                    unit: Type.String({ maxLength: 30, description: "Ingredient unit in the target locale. Prefer g and kg for weighable ingredients; use localized spoon, pinch, piece or volume units only when they are clearer." }),
-                    isOptional: Type.Boolean({ description: "True only when the ingredient is explicitly optional." })
-                  },
-                  { additionalProperties: false }
-                ),
-                { minItems: 1 }
-              )
-            },
-            { additionalProperties: false }
-          ),
-          { minItems: 1 }
-        ),
+        ingredientGroups: Type.Array(RecipeIngredientGroupSchema, { minItems: 1 }),
         steps: Type.Array(
           Type.Object(
             {
@@ -331,3 +417,148 @@ export const RecipeInputSchema = Type.Object(
 );
 
 export type RecipeInput = Static<typeof RecipeInputSchema>;
+
+const RawDeviceSettingSchema = Type.Object(
+  {
+    order: Type.Integer({ minimum: 0 }),
+    time: Type.Optional(Type.Integer({ minimum: 0 })),
+    temperature: Type.Optional(Type.Integer({ minimum: 0 })),
+    speed: Type.Optional(Type.Integer({ minimum: 0, maximum: 10 })),
+    clockwise: Type.Optional(Type.Boolean()),
+    weight: Type.Optional(Type.Integer({ minimum: 0 }))
+  },
+  { additionalProperties: false }
+);
+
+/**
+ * API-specific representation of a Monsieur Cuisine Smart device mode.
+ */
+export const RawSmartModeSchema = Type.Union([
+  Type.Null(),
+  Type.Object(
+    {
+      type: Type.String(),
+      modeSetting: Type.Null(),
+      deviceSettings: Type.Array(RawDeviceSettingSchema, { minItems: 1, maxItems: 1 })
+    },
+    { additionalProperties: false }
+  ),
+  Type.Object(
+    {
+      type: Type.Literal("cooking_eggs"),
+      modeSetting: Type.Object(
+        {
+          size: Type.Union([Type.Literal("small"), Type.Literal("medium"), Type.Literal("large")]),
+          texture: Type.Union([Type.Literal("soft"), Type.Literal("waxy_soft"), Type.Literal("hard")])
+        },
+        { additionalProperties: false }
+      )
+    },
+    { additionalProperties: false }
+  ),
+  Type.Object(
+    {
+      type: Type.Literal("precleaning"),
+      modeSetting: Type.Object(
+        {
+          duration: Type.Union([Type.Literal("short"), Type.Literal("long")])
+        },
+        { additionalProperties: false }
+      )
+    },
+    { additionalProperties: false }
+  )
+]);
+
+const RawIngredientSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1 }),
+    isOptional: Type.Boolean(),
+    unit: Type.String(),
+    amount: Type.String(),
+    systemIngredientId: Type.Null(),
+    order: Type.Integer(),
+    ingredientCategory: Type.Null(),
+    iconUrl: Type.Null()
+  },
+  { additionalProperties: false }
+);
+
+const RawIngredientGroupSchema = Type.Object(
+  {
+    name: Type.String(),
+    isDefault: Type.Boolean(),
+    order: Type.Integer(),
+    ingredients: Type.Array(RawIngredientSchema, { minItems: 1 })
+  },
+  { additionalProperties: false }
+);
+
+const RawStepSchema = Type.Object(
+  {
+    title: Type.String({ maxLength: 80 }),
+    description: Type.String({ maxLength: 240 }),
+    duration: Type.Null(),
+    mode: RawSmartModeSchema,
+    videoMedia: Type.Null(),
+    order: Type.Integer()
+  },
+  { additionalProperties: false }
+);
+
+/**
+ * Schema representing the raw API payload consumed by Monsieur Cuisine Smart.
+ */
+export const SmartRecipePayloadSchema = Type.Object(
+  {
+    status: Type.Union([Type.Literal("draft"), Type.Literal("private-publish")]),
+    source: Type.Literal("member"),
+    languageLocale: SupportedLocaleSchema,
+    deviceTypeIds: Type.Array(Type.Literal(13), { minItems: 1, maxItems: 1 }),
+    title: Type.String({ minLength: 1 }),
+    description: Type.String(),
+    thumbnail: Type.Object(
+      {
+        portraitMediaId: Type.Union([Type.Integer(), Type.Null()]),
+        landscapeMediaId: Type.Union([Type.Integer(), Type.Null()])
+      },
+      { additionalProperties: false }
+    ),
+    detailsImage: Type.Object(
+      {
+        portraitMediaId: Type.Union([Type.Integer(), Type.Null()]),
+        landscapeMediaId: Type.Union([Type.Integer(), Type.Null()])
+      },
+      { additionalProperties: false }
+    ),
+    complexityId: Type.Integer(),
+    allowSocialSharing: Type.Literal(false),
+    categoryIds: Type.Array(Type.Integer()),
+    nutrients: Type.Array(NutrientSchema),
+    servingSizes: Type.Array(
+      Type.Object(
+        {
+          amount: Type.Integer({ minimum: 1 }),
+          maxServing: Type.Null(),
+          instruction: Type.String(),
+          unit: Type.String(),
+          isDefault: Type.Literal(true),
+          preparationTime: Type.Integer(),
+          readyInTime: Type.Integer(),
+          ingredientGroups: Type.Array(RawIngredientGroupSchema),
+          steps: Type.Array(RawStepSchema),
+          order: Type.Literal(0)
+        },
+        { additionalProperties: false }
+      ),
+      { minItems: 1, maxItems: 1 }
+    )
+  },
+  {
+    $id: "https://github.com/smart-recipe/smart-recipe/schemas/recipe-payload.json",
+    additionalProperties: false,
+    description: "API-specific recipe payload structure required by Monsieur Cuisine Smart (MC3.0)."
+  }
+);
+
+export type SmartRecipePayload = Static<typeof SmartRecipePayloadSchema>;

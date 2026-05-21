@@ -99,8 +99,10 @@ export class OpenAIRecipeImageGenerator implements RecipeImageProvider {
   }
 }
 
+const OPENAI_SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 function hasImageBytes(image: RetrievedImage): image is RetrievedImage & { bytes: Uint8Array } {
-  return Boolean(image.bytes && image.contentType.startsWith("image/"));
+  return Boolean(image.bytes && OPENAI_SUPPORTED_IMAGE_TYPES.has(image.contentType));
 }
 
 async function toOpenAIFile(image: RetrievedImage & { bytes: Uint8Array }, index: number): Promise<File> {

@@ -5,16 +5,14 @@ import {
   SMART_MODE_GUIDE,
   SMART_MODE_TYPES
 } from "./constants.js";
+import type { Static } from "typebox";
+import type { RawSmartModeSchema } from "./schema.js";
 import type { PromptModeInput } from "./types.js";
 
 type TimeModeInput = Extract<PromptModeInput, { seconds: number }>;
 type TemperatureTimeModeInput = Extract<PromptModeInput, { temperature: number; minutes: number; seconds: number }>;
 
-export type RawSmartMode =
-  | null
-  | { type: string; modeSetting: null; deviceSettings: Array<Record<string, unknown>> }
-  | { type: "cooking_eggs"; modeSetting: { size: string; texture: string } }
-  | { type: "precleaning"; modeSetting: { duration: string } };
+export type RawSmartMode = Static<typeof RawSmartModeSchema>;
 
 export function secondsFromParts(minutes = 0, seconds = 0): number {
   assertIntegerRange(minutes, 0, 10000, "minutes");
@@ -40,7 +38,7 @@ export function promptModeToRawMode(input?: PromptModeInput | null): RawSmartMod
       }
       return {
         type: SMART_MODE_TYPES.manualCooking,
-        modeSetting: null,
+        modeSetting: null as null,
         deviceSettings: [
           {
             order: 0,
@@ -59,7 +57,7 @@ export function promptModeToRawMode(input?: PromptModeInput | null): RawSmartMod
       assertIntegerRange(weight, SMART_MODE_GUIDE.scale.weight.min, SMART_MODE_GUIDE.scale.weight.max, "scale.grams");
       return {
         type: SMART_MODE_TYPES.scale,
-        modeSetting: null,
+        modeSetting: null as null,
         deviceSettings: [{ order: 0, weight }]
       };
     }
@@ -127,7 +125,7 @@ function timeMode(type: string, input: TimeModeInput, min: number, max: number) 
   const minutes = "minutes" in input ? input.minutes : 0;
   const time = secondsFromParts(minutes, input.seconds);
   assertIntegerRange(time, min, max, `${input.type}.time`);
-  return { type, modeSetting: null, deviceSettings: [{ order: 0, time }] };
+  return { type, modeSetting: null as null, deviceSettings: [{ order: 0, time }] };
 }
 
 function temperatureTimeMode(
@@ -141,7 +139,7 @@ function temperatureTimeMode(
   assertIntegerRange(time, min, max, `${input.type}.time`);
   return {
     type,
-    modeSetting: null,
+    modeSetting: null as null,
     deviceSettings: [{ order: 0, temperature: temperatureResolver(), time }]
   };
 }

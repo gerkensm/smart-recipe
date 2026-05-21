@@ -1,4 +1,4 @@
-import { getCatalog, resolveCategoryIds, resolveComplexityId } from "../catalogs/catalogs.js";
+import { getCatalog } from "../catalogs/catalogs.js";
 import { MONSIEUR_CUISINE_SMART_DEVICE_TYPE_ID } from "./constants.js";
 import { promptModeToRawMode } from "./modes.js";
 import type { SmartRecipeInput, SmartRecipePayload } from "./types.js";
@@ -10,7 +10,7 @@ export interface CreateSmartRecipePayloadOptions extends SmartRecipeInput {
 }
 
 export function createSmartRecipePayload(options: CreateSmartRecipePayloadOptions): SmartRecipePayload {
-  const locale = options.locale ?? "de-DE";
+  const locale = options.settings?.locale ?? "de-DE";
   const catalog = getCatalog(locale);
   const payload: SmartRecipePayload = {
     status: options.status ?? "draft",
@@ -27,9 +27,9 @@ export function createSmartRecipePayload(options: CreateSmartRecipePayloadOption
       portraitMediaId: options.detailsImageMediaId ?? null,
       landscapeMediaId: options.detailsImageMediaId ?? null
     },
-    complexityId: resolveComplexityId(options.complexity ?? "easy", locale),
+    complexityId: options.settings?.complexityId ?? 142,
     allowSocialSharing: false,
-    categoryIds: resolveCategoryIds(options.categoryKeys ?? [], locale),
+    categoryIds: options.categoryIds ?? [],
     nutrients: (options.nutrients ?? []).map((nutrient) => ({
       name: nutrient.name,
       unit: nutrient.unit,

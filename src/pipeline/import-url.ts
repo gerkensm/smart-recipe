@@ -8,8 +8,9 @@ import type { RecipeInput } from "../recipes/schema.js";
 import type { SmartRecipePayload } from "../recipes/types.js";
 import { RecipePageRetriever } from "../retriever/retriever.js";
 import type { RetrievedRecipePage } from "../retriever/types.js";
-import type { ReasoningEffort } from "../llm/types.js";
+import type { ReasoningEffort, RecipeGenerationOptions } from "../llm/types.js";
 import type { SupportedLocale } from "../catalogs/types.js";
+import type { PromptModeType } from "../recipes/types.js";
 import { RetrievedRecipeImageProvider, type RecipeImageAsset, type RecipeImageProvider } from "./images.js";
 
 export interface ImportRecipeFromUrlOptions {
@@ -19,6 +20,8 @@ export interface ImportRecipeFromUrlOptions {
   locale?: SupportedLocale;
   openAIModel?: string;
   reasoningEffort?: ReasoningEffort;
+  /** Mode types to exclude from generation (e.g. ["foodProcessor"] if the user doesn't own the accessory). */
+  excludeModes?: PromptModeType[];
   cookie?: string;
   authProvider?: AuthProvider;
   imageProvider?: RecipeImageProvider;
@@ -46,9 +49,10 @@ export async function importRecipeFromUrl(options: ImportRecipeFromUrlOptions): 
   const generator = new OpenAIRecipeGenerator({
     model: options.openAIModel,
     reasoningEffort: options.reasoningEffort,
-    locale
+    locale,
+    excludeModes: options.excludeModes
   });
-  const recipeInput = await generator.generate(page, { locale });
+  const recipeInput = await generator.generate(page, { locale, excludeModes: options.excludeModes });
 
   let uploadedImage: { detailsMediaId: number; thumbnailMediaId: number } | undefined;
   let thumbnailMediaId: number | null = null;

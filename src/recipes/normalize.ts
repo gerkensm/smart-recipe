@@ -6,7 +6,7 @@ export function normalizeRecipeInput(input: RecipeInput): RecipeInput {
     title: input.title.trim(),
     description: input.description ?? "",
     status: input.status ?? "draft",
-    categoryKeys: [...new Set(input.categoryKeys ?? [])] as RecipeInput["categoryKeys"],
+    categoryIds: [...new Set(input.categoryIds ?? [])] as RecipeInput["categoryIds"],
     servingSize: {
       ...input.servingSize,
       instruction: input.servingSize.instruction ?? "",
