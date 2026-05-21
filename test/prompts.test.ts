@@ -10,6 +10,14 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("set settings.locale to de-DE");
     expect(prompt).toContain("German as used in Germany");
     expect(prompt).toContain("Category IDs and German site IDs");
+    expect(prompt).toContain("MULTI-LEVEL STEAMING OPTIMIZATION");
+    expect(prompt).toContain("STEAMING PREHEAT CHOICE");
+    expect(prompt).toContain("SCRAPE DOWN RULE");
+    expect(prompt).toContain("GROSS VS. NET WEIGHT RULE");
+    expect(prompt).toContain("bei der Abfrage zu Aufheizen 'Ja' wählen");
+    expect(prompt).toContain("bei der Abfrage zu Aufheizen 'Nein' wählen");
+    expect(prompt).toContain("mit dem Spatel nach unten schieben");
+    expect(prompt).toContain("{ingredient} schälen/putzen (ergibt ca. {net} g)");
   });
 
   it("supports the English locale guidance", () => {
@@ -18,6 +26,11 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("set settings.locale to en-US");
     expect(prompt).toContain("English");
     expect(prompt).toContain("Category IDs and English site IDs");
+    expect(prompt).toContain("select 'Yes' when asked to preheat");
+    expect(prompt).toContain("select 'No' when asked to preheat");
+    expect(prompt).toContain("scrape down the sides of the bowl using the spatula");
+    expect(prompt).toContain("GROSS VS. NET WEIGHT RULE");
+    expect(prompt).toContain("Peel/trim {ingredient} (yields approx. {net} g)");
   });
 
   it("includes accessory and hardware rules with de-DE device terms", () => {
@@ -28,6 +41,9 @@ describe("LLM prompt guidance", () => {
     expect(rules).toContain("Rühraufsatz einsetzen");
     expect(rules).toContain("Kocheinsatz");
     expect(rules).toContain("Dampfgaraufsatz aufsetzen");
+    expect(rules).toContain("flacher Dampfgaraufsatz");
+    expect(rules).toContain("den Kocheinsatz mithilfe des Spatels herausnehmen");
+    expect(rules).toContain("den Kocheinsatz als Spritzschutz auf den Deckel setzen");
     expect(rules).toContain("hotter than 60 C");
   });
 

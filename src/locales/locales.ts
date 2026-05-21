@@ -14,6 +14,7 @@ export interface LocaleText {
     butterflyWhisk: string;
     simmeringBasket: string;
     steamerAttachment: string;
+    steamerInsert: string;
     measuringCup: string;
     spatula: string;
     turbo: string;
@@ -22,6 +23,12 @@ export interface LocaleText {
     insertButterflyWhisk: string;
     insertSimmeringBasket: string;
     attachSteamerAttachment: string;
+    preheatSteamingCold: string;
+    preheatSteamingHot: string;
+    spatulaScrape: string;
+    liftSimmeringBasket: string;
+    useBasketAsSplashGuard: string;
+    grossNetWeightTemplate: string;
   };
 }
 
@@ -64,6 +71,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       butterflyWhisk: "metla",
       simmeringBasket: "vařicí košík",
       steamerAttachment: "napařovací nástavec",
+      steamerInsert: "plochý napařovací nástavec",
       measuringCup: "odměrka",
       spatula: "stěrka",
       turbo: "Turbo"
@@ -71,7 +79,13 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
     accessoryPhrases: {
       insertButterflyWhisk: "nasadit metlu",
       insertSimmeringBasket: "zavěsit vařicí košík",
-      attachSteamerAttachment: "nasadit napařovací nástavec"
+      attachSteamerAttachment: "nasadit napařovací nástavec",
+      preheatSteamingCold: "při dotazu na předehřátí zvolte 'Ano'",
+      preheatSteamingHot: "při dotazu na předehřátí zvolte 'Ne'",
+      spatulaScrape: "stěrkou setřete stěny nádoby dolů",
+      liftSimmeringBasket: "vyjměte vařicí košík pomocí stěrky",
+      useBasketAsSplashGuard: "položte vařicí košík na víko jako ochranu proti vystříknutí",
+      grossNetWeightTemplate: "Oloupat/očistit {ingredient} (cca {net} g). Do mixovací nádoby přidejte {net} g připraveného/ých {ingredient}."
     }
   },
   "pl-PL": {
@@ -112,6 +126,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       butterflyWhisk: "motylek",
       simmeringBasket: "koszyczek do gotowania",
       steamerAttachment: "nakładka do gotowania na parze",
+      steamerInsert: "płaski wkład do gotowania na parze",
       measuringCup: "miarka",
       spatula: "szpatułka",
       turbo: "Turbo"
@@ -119,7 +134,13 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
     accessoryPhrases: {
       insertButterflyWhisk: "założyć motylek",
       insertSimmeringBasket: "zawiesić koszyczek do gotowania",
-      attachSteamerAttachment: "założyć nakładkę do gotowania na parze"
+      attachSteamerAttachment: "założyć nakładkę do gotowania na parze",
+      preheatSteamingCold: "wybierz 'Tak' przy pytaniu o podgrzewanie",
+      preheatSteamingHot: "wybierz 'Nie' przy pytaniu o podgrzewanie",
+      spatulaScrape: "zgarnąć składniki szpatułką ze ścianek naczynia",
+      liftSimmeringBasket: "wyjąć koszyczek za pomocą szpatułki",
+      useBasketAsSplashGuard: "nałożyć koszyczek na pokrywę jako osłonę przed pryskaniem",
+      grossNetWeightTemplate: "Obrać/oczyścić {ingredient} (daje ok. {net} g). Dodać {net} g przygotowanego/ych {ingredient} do naczynia."
     }
   },
   "de-DE": {
@@ -160,6 +181,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       butterflyWhisk: "Rühraufsatz",
       simmeringBasket: "Kocheinsatz",
       steamerAttachment: "Dampfgaraufsatz",
+      steamerInsert: "flacher Dampfgaraufsatz",
       measuringCup: "Messbecher",
       spatula: "Spatel",
       turbo: "Turbo"
@@ -167,7 +189,13 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
     accessoryPhrases: {
       insertButterflyWhisk: "Rühraufsatz einsetzen",
       insertSimmeringBasket: "Kocheinsatz einhängen",
-      attachSteamerAttachment: "Dampfgaraufsatz aufsetzen"
+      attachSteamerAttachment: "Dampfgaraufsatz aufsetzen",
+      preheatSteamingCold: "bei der Abfrage zu Aufheizen 'Ja' wählen",
+      preheatSteamingHot: "bei der Abfrage zu Aufheizen 'Nein' wählen",
+      spatulaScrape: "mit dem Spatel nach unten schieben",
+      liftSimmeringBasket: "den Kocheinsatz mithilfe des Spatels herausnehmen",
+      useBasketAsSplashGuard: "den Kocheinsatz als Spritzschutz auf den Deckel setzen",
+      grossNetWeightTemplate: "{ingredient} schälen/putzen (ergibt ca. {net} g). {net} g vorbereitete(s) {ingredient} in den Mixbehälter geben."
     }
   },
   "fr-FR": {
@@ -208,6 +236,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       butterflyWhisk: "fouet",
       simmeringBasket: "panier cuisson",
       steamerAttachment: "accessoire vapeur",
+      steamerInsert: "plateau vapeur",
       measuringCup: "gobelet doseur",
       spatula: "spatule",
       turbo: "Turbo"
@@ -215,7 +244,13 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
     accessoryPhrases: {
       insertButterflyWhisk: "insérer le fouet",
       insertSimmeringBasket: "accrocher le panier cuisson",
-      attachSteamerAttachment: "mettre en place l'accessoire vapeur"
+      attachSteamerAttachment: "mettre en place l'accessoire vapeur",
+      preheatSteamingCold: "sélectionner 'Oui' à la question sur le préchauffage",
+      preheatSteamingHot: "sélectionner 'Non' à la question sur le préchauffage",
+      spatulaScrape: "racler les parois à l'aide de la spatule",
+      liftSimmeringBasket: "retirer le panier cuisson à l'aide de la spatule",
+      useBasketAsSplashGuard: "placer le panier cuisson sur le couvercle pour éviter les projections",
+      grossNetWeightTemplate: "Éplucher/parer {ingredient} (donne environ {net} g). Ajouter {net} g de {ingredient} préparé(s) dans le bol."
     }
   },
   "en-US": {
@@ -256,6 +291,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       butterflyWhisk: "butterfly whisk",
       simmeringBasket: "simmering basket",
       steamerAttachment: "steamer attachment",
+      steamerInsert: "flat steamer insert",
       measuringCup: "measuring cup",
       spatula: "spatula",
       turbo: "Turbo"
@@ -263,7 +299,13 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
     accessoryPhrases: {
       insertButterflyWhisk: "insert the butterfly whisk",
       insertSimmeringBasket: "hang the simmering basket",
-      attachSteamerAttachment: "attach the steamer attachment"
+      attachSteamerAttachment: "attach the steamer attachment",
+      preheatSteamingCold: "select 'Yes' when asked to preheat",
+      preheatSteamingHot: "select 'No' when asked to preheat",
+      spatulaScrape: "scrape down the sides of the bowl using the spatula",
+      liftSimmeringBasket: "remove the simmering basket using the spatula",
+      useBasketAsSplashGuard: "place the simmering basket on the lid as a splash guard",
+      grossNetWeightTemplate: "Peel/trim {ingredient} (yields approx. {net} g). Add {net} g prepared {ingredient} to the bowl."
     }
   },
   "it-IT": {
@@ -304,6 +346,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       butterflyWhisk: "frusta",
       simmeringBasket: "cestello di cottura",
       steamerAttachment: "accessorio vapore",
+      steamerInsert: "vassoio vapore piatto",
       measuringCup: "misurino",
       spatula: "spatola",
       turbo: "Turbo"
@@ -311,7 +354,13 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
     accessoryPhrases: {
       insertButterflyWhisk: "inserire la frusta",
       insertSimmeringBasket: "agganciare il cestello di cottura",
-      attachSteamerAttachment: "montare l'accessorio vapore"
+      attachSteamerAttachment: "montare l'accessorio vapore",
+      preheatSteamingCold: "selezionare 'Sì' alla domanda sul preriscaldamento",
+      preheatSteamingHot: "selezionare 'No' alla domanda sul preriscaldamento",
+      spatulaScrape: "spingere verso il basso con la spatola",
+      liftSimmeringBasket: "rimuovere il cestello di cottura con la spatola",
+      useBasketAsSplashGuard: "posizionare il cestello di cottura sul coperchio come paraspruzzi",
+      grossNetWeightTemplate: "Sbucciare/pulire {ingredient} (circa {net} g). Aggiungere {net} g di {ingredient} preparato/i nel boccale."
     }
   }
 };
