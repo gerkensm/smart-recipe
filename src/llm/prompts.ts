@@ -62,7 +62,7 @@ export function buildRecipeInstructions(locale: SupportedLocale = "de-DE", exclu
     "GLOBAL TIMELINE OPTIMIZATION: Do not simply translate the source recipe linearly. Before generating steps, analyze the entire recipe to identify long, unattended machine operations (e.g., simmering, steaming, or boiling for more than 3 minutes). You MUST heavily restructure the recipe order so that all manual preparation tasks (peeling, chopping, washing, weighing future ingredients) are delayed and scheduled as 'Look-ahead Prep Steps' (mode: none) immediately preceding these long machine operations. The goal is zero idle time for the machine and zero idle time for the human.\n" +
     "Contrast Examples:\n" +
     "- Standard Linear Flow (Bad): 1. Peel potatoes. 2. Chop carrots. 3. Sauté onions (3 min). 4. Boil everything (20 min).\n" +
-    "- Optimized JIT Flow (Good): 1. Sauté onions (3 min). 2. Look-ahead Prep: 'Read this step and proceed to the next step to start the machine, then use the cooking time to peel the potatoes and chop the carrots.' 3. Boil everything (20 min).",
+    "- Optimized JIT Flow (Good): 1. Sauté onions (3 min). 2. Look-ahead Prep: 'Use the cooking time in the following step to peel the potatoes and chop the carrots.' 3. Boil everything (20 min).",
     "",
     "Accessory and hardware rules:",
     accessoryHardwareRules(locale),

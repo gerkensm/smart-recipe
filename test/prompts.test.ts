@@ -35,7 +35,7 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("CONTINUOUS FEEDING");
     expect(prompt).toContain("PARALLEL PREP SEQUENCING");
     expect(prompt).toContain("GLOBAL TIMELINE OPTIMIZATION");
-    expect(prompt).toContain("Diesen Schritt lesen und zum nächsten Schritt gehen, um das Gerät zu starten, dann die Kochzeit nutzen, um {task}.");
+    expect(prompt).toContain("Die Kochzeit im folgenden Schritt nutzen, um {task}.");
   });
 
   it("supports the English locale guidance", () => {
@@ -60,7 +60,7 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("remove the mixing bowl lid and lock the steamer attachment directly onto the mixing bowl");
     expect(prompt).toContain("PARALLEL PREP SEQUENCING");
     expect(prompt).toContain("GLOBAL TIMELINE OPTIMIZATION");
-    expect(prompt).toContain("Read this step and proceed to the next step to start the machine, then use the cooking time to {task}.");
+    expect(prompt).toContain("Use the cooking time in the following step to {task}.");
   });
 
   it("includes accessory and hardware rules with de-DE device terms", () => {

@@ -103,7 +103,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       dropOntoRunningBlades: "vhodit otvorem ve víku na běžící nože",
       removeMeasuringCup: "vyjmout odměrku",
       steamerSetup: "sejmout víko mixovací nádoby a nasadit napařovací nástavec přímo na mixovací nádobu",
-      lookAheadPrepTemplate: "Přečtěte si tento pokyn a přejděte k dalšímu kroku pro spuštění přístroje, poté využijte čas vaření k {task}."
+      lookAheadPrepTemplate: "Využijte čas vaření v následujícím kroku k {task}."
     }
   },
   "pl-PL": {
@@ -167,7 +167,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       dropOntoRunningBlades: "wrzucić przez otwór w pokrywie na obracające się noże",
       removeMeasuringCup: "wyjąć miarkę",
       steamerSetup: "zdjąć pokrywę naczynia miksującego i zamontować nakładkę do gotowania na parze bezpośrednio na naczyniu",
-      lookAheadPrepTemplate: "Przeczytaj to i przejdź do kolejnego kroku, aby uruchomić urządzenie, a następnie wykorzystaj czas gotowania na {task}."
+      lookAheadPrepTemplate: "Wykorzystaj czas gotowania w kolejnym kroku na {task}."
     }
   },
   "de-DE": {
@@ -231,7 +231,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       dropOntoRunningBlades: "durch die Deckelöffnung auf die laufenden Messer fallen lassen",
       removeMeasuringCup: "den Messbecher entfernen",
       steamerSetup: "den Deckel des Mixbehälters abnehmen und den Dampfgaraufsatz direkt auf den Mixbehälter aufsetzen",
-      lookAheadPrepTemplate: "Diesen Schritt lesen und zum nächsten Schritt gehen, um das Gerät zu starten, dann die Kochzeit nutzen, um {task}."
+      lookAheadPrepTemplate: "Die Kochzeit im folgenden Schritt nutzen, um {task}."
     }
   },
   "fr-FR": {
@@ -295,7 +295,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       dropOntoRunningBlades: "insérer par l'orifice du couvercle sur les couteaux en marche",
       removeMeasuringCup: "retirer le gobelet doseur",
       steamerSetup: "retirer le couvercle du bol de mixage et mettre en place l'accessoire vapeur directement sur le bol",
-      lookAheadPrepTemplate: "Lire cette étape et passer à la suivante pour démarrer l'appareil, puis utiliser le temps de cuisson pour {task}."
+      lookAheadPrepTemplate: "Utiliser le temps de cuisson de l'étape suivante pour {task}."
     }
   },
   "en-US": {
@@ -359,7 +359,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       dropOntoRunningBlades: "drop through the lid opening onto the running blades",
       removeMeasuringCup: "remove the measuring cup",
       steamerSetup: "remove the mixing bowl lid and lock the steamer attachment directly onto the mixing bowl",
-      lookAheadPrepTemplate: "Read this step and proceed to the next step to start the machine, then use the cooking time to {task}."
+      lookAheadPrepTemplate: "Use the cooking time in the following step to {task}."
     }
   },
   "it-IT": {
@@ -423,7 +423,7 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       dropOntoRunningBlades: "far cadere attraverso il foro del coperchio sulle lame in movimento",
       removeMeasuringCup: "rimuovere il misurino",
       steamerSetup: "rimuovere il coperchio del boccale e montare l'accessorio vapore direttamente sul boccale",
-      lookAheadPrepTemplate: "Leggere questo passaggio e procedere al successivo per avviare l'apparecchio, quindi utilizzare il tempo di cottura per {task}."
+      lookAheadPrepTemplate: "Utilizzare il tempo di cottura del passaggio successivo per {task}."
     }
   }
 };
