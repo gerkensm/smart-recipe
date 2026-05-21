@@ -29,8 +29,13 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("CHOP-SCRAPE-SAUTÉ SEQUENCE");
     expect(prompt).toContain("TEMPERATURE CEILINGS FOR SENSITIVE INGREDIENTS");
     expect(prompt).toContain("MOISTURE REDUCTION");
+    expect(prompt).toContain("STEAMER SETUP");
+    expect(prompt).toContain("den Deckel des Mixbehälters abnehmen und den Dampfgaraufsatz direkt auf den Mixbehälter aufsetzen");
     expect(prompt).toContain("RAPID COOL-DOWN");
     expect(prompt).toContain("CONTINUOUS FEEDING");
+    expect(prompt).toContain("PARALLEL PREP SEQUENCING");
+    expect(prompt).toContain("GLOBAL TIMELINE OPTIMIZATION");
+    expect(prompt).toContain("Diesen Schritt lesen und zum nächsten Schritt gehen, um das Gerät zu starten, dann die Kochzeit nutzen, um {task}.");
   });
 
   it("supports the English locale guidance", () => {
@@ -51,6 +56,11 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("The mixing bowl and butterfly whisk must be absolutely clean, dry, and fat-free");
     expect(prompt).toContain("drop through the lid opening onto the running blades");
     expect(prompt).toContain("remove the measuring cup");
+    expect(prompt).toContain("STEAMER SETUP");
+    expect(prompt).toContain("remove the mixing bowl lid and lock the steamer attachment directly onto the mixing bowl");
+    expect(prompt).toContain("PARALLEL PREP SEQUENCING");
+    expect(prompt).toContain("GLOBAL TIMELINE OPTIMIZATION");
+    expect(prompt).toContain("Read this step and proceed to the next step to start the machine, then use the cooking time to {task}.");
   });
 
   it("includes accessory and hardware rules with de-DE device terms", () => {
@@ -66,6 +76,7 @@ describe("LLM prompt guidance", () => {
     expect(rules).toContain("den Kocheinsatz als Spritzschutz auf den Deckel setzen");
     expect(rules).toContain("hotter than 60 C");
     expect(rules).toContain("den Messbecher entfernen");
+    expect(rules).toContain("den Deckel des Mixbehälters abnehmen und den Dampfgaraufsatz direkt auf den Mixbehälter aufsetzen");
     expect(rules).toContain("Nach dem Mixen heißer Zutaten ca. 10 Sekunden warten");
     expect(rules).toContain("in ca. 3–4 cm große Stücke schneiden");
     expect(rules).toContain("mindestens 500 ml");

@@ -36,6 +36,8 @@ export interface LocaleText {
     cleanDryFatFree: string;
     dropOntoRunningBlades: string;
     removeMeasuringCup: string;
+    steamerSetup: string;
+    lookAheadPrepTemplate: string;
   };
 }
 
@@ -99,7 +101,9 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       emulsionOilDrip: "pomalé nalévání oleje na víko, aby stékal kolem odměrky do mixovací nádoby",
       cleanDryFatFree: "Mixovací nádoba a metla musí být naprosto čisté, suché a bez tuku.",
       dropOntoRunningBlades: "vhodit otvorem ve víku na běžící nože",
-      removeMeasuringCup: "vyjmout odměrku"
+      removeMeasuringCup: "vyjmout odměrku",
+      steamerSetup: "sejmout víko mixovací nádoby a nasadit napařovací nástavec přímo na mixovací nádobu",
+      lookAheadPrepTemplate: "Přečtěte si tento pokyn a přejděte k dalšímu kroku pro spuštění přístroje, poté využijte čas vaření k {task}."
     }
   },
   "pl-PL": {
@@ -161,7 +165,9 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       emulsionOilDrip: "powoli wlewać olej na pokrywę, tak aby ściekał obok miarki do naczynia",
       cleanDryFatFree: "Naczynie miksujące i motylek muszą być całkowicie czyste, suche i wolne od tłuszczu.",
       dropOntoRunningBlades: "wrzucić przez otwór w pokrywie na obracające się noże",
-      removeMeasuringCup: "wyjąć miarkę"
+      removeMeasuringCup: "wyjąć miarkę",
+      steamerSetup: "zdjąć pokrywę naczynia miksującego i zamontować nakładkę do gotowania na parze bezpośrednio na naczyniu",
+      lookAheadPrepTemplate: "Przeczytaj to i przejdź do kolejnego kroku, aby uruchomić urządzenie, a następnie wykorzystaj czas gotowania na {task}."
     }
   },
   "de-DE": {
@@ -223,7 +229,9 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       emulsionOilDrip: "Öl langsam auf den Deckel gießen, sodass es am Messbecher vorbei in den Mixbehälter träufelt",
       cleanDryFatFree: "Mixbehälter und Rühraufsatz müssen absolut sauber, trocken und fettfrei sein.",
       dropOntoRunningBlades: "durch die Deckelöffnung auf die laufenden Messer fallen lassen",
-      removeMeasuringCup: "den Messbecher entfernen"
+      removeMeasuringCup: "den Messbecher entfernen",
+      steamerSetup: "den Deckel des Mixbehälters abnehmen und den Dampfgaraufsatz direkt auf den Mixbehälter aufsetzen",
+      lookAheadPrepTemplate: "Diesen Schritt lesen und zum nächsten Schritt gehen, um das Gerät zu starten, dann die Kochzeit nutzen, um {task}."
     }
   },
   "fr-FR": {
@@ -285,7 +293,9 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       emulsionOilDrip: "verser lentement l'huile sur le couvercle pour qu'elle s'écoule le long du gobelet doseur",
       cleanDryFatFree: "Le bol de mixage et le fouet doivent être absolument propres, secs et sans trace de graisse.",
       dropOntoRunningBlades: "insérer par l'orifice du couvercle sur les couteaux en marche",
-      removeMeasuringCup: "retirer le gobelet doseur"
+      removeMeasuringCup: "retirer le gobelet doseur",
+      steamerSetup: "retirer le couvercle du bol de mixage et mettre en place l'accessoire vapeur directement sur le bol",
+      lookAheadPrepTemplate: "Lire cette étape et passer à la suivante pour démarrer l'appareil, puis utiliser le temps de cuisson pour {task}."
     }
   },
   "en-US": {
@@ -347,7 +357,9 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       emulsionOilDrip: "slowly pour the oil onto the lid so it trickles past the measuring cup into the bowl",
       cleanDryFatFree: "The mixing bowl and butterfly whisk must be absolutely clean, dry, and fat-free.",
       dropOntoRunningBlades: "drop through the lid opening onto the running blades",
-      removeMeasuringCup: "remove the measuring cup"
+      removeMeasuringCup: "remove the measuring cup",
+      steamerSetup: "remove the mixing bowl lid and lock the steamer attachment directly onto the mixing bowl",
+      lookAheadPrepTemplate: "Read this step and proceed to the next step to start the machine, then use the cooking time to {task}."
     }
   },
   "it-IT": {
@@ -409,7 +421,9 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       emulsionOilDrip: "versare lentamente l'olio sul coperchio in modo che coli lungo il misurino nel boccale",
       cleanDryFatFree: "Il boccale e la frusta devono essere perfettamente puliti, asciutti e privi di grasso.",
       dropOntoRunningBlades: "far cadere attraverso il foro del coperchio sulle lame in movimento",
-      removeMeasuringCup: "rimuovere il misurino"
+      removeMeasuringCup: "rimuovere il misurino",
+      steamerSetup: "rimuovere il coperchio del boccale e montare l'accessorio vapore direttamente sul boccale",
+      lookAheadPrepTemplate: "Leggere questo passaggio e procedere al successivo per avviare l'apparecchio, quindi utilizzare il tempo di cottura per {task}."
     }
   }
 };
