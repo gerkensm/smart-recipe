@@ -2,7 +2,7 @@
 
 **Turn almost any recipe page into an editable Monsieur Cuisine Smart recipe draft.**
 
-SmartRecipe reads a recipe from the web, asks OpenAI to turn it into a Monsieur Cuisine Smart workflow, and creates a draft recipe in your Monsieur Cuisine account. You can then open the draft, review it, edit it, and cook it on your device.
+SmartRecipe reads a recipe from the web, asks OpenAI to turn it into a Monsieur Cuisine Smart workflow, displays it in the terminal, and optionally creates a draft in your Monsieur Cuisine account. You can then open the draft, review it, edit it, and cook it on your device.
 
 It is made for people who find good recipes online but do not want to manually rebuild every ingredient, weighing step, cooking mode, temperature, speed, and image inside the Monsieur Cuisine app.
 
@@ -21,12 +21,13 @@ smart-recipe import-url "https://example.com/my-favorite-recipe"
 
 It will:
 
-1. Read the recipe page.
-2. Extract the useful recipe content.
-3. Convert it into a Monsieur Cuisine Smart recipe.
-4. Use Smart modes where they make sense.
-5. Create a draft in your Monsieur Cuisine account.
-6. Upload a recipe image from the page, or create a new one with OpenAI.
+1. Read the recipe page and show you the extracted markdown.
+2. Ask for your OpenAI API key if none is configured (and offer to save it).
+3. Convert the recipe into a Monsieur Cuisine Smart workflow.
+4. Display the fully formatted recipe in the terminal — ingredients, steps, modes, timings, and nutrients.
+5. Ask whether you want to upload it to Monsieur Cuisine.
+6. If you do: guide you through authentication (browser login or cookie paste) and offer to save the session.
+7. Upload a recipe image from the page, or create a new one with OpenAI.
 
 The result is not just copied text. SmartRecipe tries to turn the recipe into a device-native cooking flow with structured ingredients, steps, timings, temperatures, speeds, rotation direction, scale steps, kneading, steaming, roasting, slow cooking, and other Smart modes where appropriate.
 
@@ -121,7 +122,9 @@ node dist/cli/main.js
 
 ## Set up OpenAI
 
-Create a `.env` file in the project directory, or export the variable in your shell:
+If you run `import-url` without an API key configured, SmartRecipe will ask for it interactively and offer to save it. You only need to do this once.
+
+Alternatively, set it in advance via a `.env` file, `~/.smart-recipe`, or your shell:
 
 ```bash
 OPENAI_API_KEY=sk-...
@@ -148,80 +151,36 @@ You can also use `.env.example` as a starting point.
 
 ## Log in to Monsieur Cuisine
 
-The easiest option is the browser login helper:
+You do not need to set anything up in advance. When you run `import-url` and choose to upload, SmartRecipe will ask how you want to authenticate:
+
+* **Browser login** — opens a small Chromium window. Sign in with your Lidl Plus account. SmartRecipe captures the cookie automatically.
+* **Paste cookie** — shows step-by-step instructions for copying the cookie from your browser's DevTools, then saves it for you.
+
+In both cases SmartRecipe offers to save the session to `~/.smart-recipe` so you do not need to log in again.
+
+### Log in in advance
+
+If you prefer to authenticate before your first import:
 
 ```bash
 smart-recipe login-browser --save
 ```
 
-This opens a small browser window. Log in with your normal Lidl Plus / Monsieur Cuisine account. SmartRecipe captures the session cookie and stores it in:
+This opens a small browser window. Log in with your normal Lidl Plus / Monsieur Cuisine account. SmartRecipe captures the session cookie and stores it in `~/.smart-recipe`.
 
-```text
-~/.smart-recipe
-```
+### Pass a cookie directly
 
-After that, imports can reuse the saved session.
-
-### If browser login does not work: copy your cookie manually
-
-The automated login helper is convenient, but it depends on the current Lidl Plus / Monsieur Cuisine website login flow. If that flow changes, the helper may fail.
-
-You can always log in manually in your normal browser and copy the session cookie yourself.
-
-#### 1. Open Monsieur Cuisine in your browser
-
-Go to the Monsieur Cuisine recipe website for your region and log in with your Lidl Plus / Monsieur Cuisine account.
-
-For Germany, this is usually:
-
-```text
-https://www.monsieur-cuisine.com/de/
-```
-
-#### 2. Open your browser developer tools
-
-In Chrome, Edge, or another Chromium-based browser:
-
-1. Right-click on the page.
-2. Choose **Inspect**.
-3. Open the **Network** tab.
-4. Reload the page while the Network tab is open.
-5. Click any request to `monsieur-cuisine.com`.
-6. In **Headers**, find **Request Headers**.
-7. Copy the complete value of the `Cookie` header.
-
-It will look roughly like this:
-
-```text
-cookie_name=value; another_cookie=value; ...
-```
-
-Copy the whole line after `Cookie:`. Do not copy only one cookie value.
-
-#### 3. Use the cookie for one command
+If you already have a cookie (from DevTools → Network → any request → Request Headers → `Cookie:`), pass it with `--cookie`:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --cookie "cookie_name=value; another_cookie=value; ..."
+smart-recipe import-url "https://example.com/recipe" --cookie "cookie_name=value; ..."
 ```
 
-#### 4. Or let SmartRecipe ask for it
+Or store it permanently:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --prompt-cookie
-```
-
-#### 5. Or save it in your environment
-
-You can add it to `.env` or `~/.smart-recipe`:
-
-```bash
+# in .env or ~/.smart-recipe
 MC_COOKIE="cookie_name=value; another_cookie=value; ..."
-```
-
-Then run imports normally:
-
-```bash
-smart-recipe import-url "https://example.com/recipe"
 ```
 
 > [!WARNING]
@@ -231,16 +190,24 @@ smart-recipe import-url "https://example.com/recipe"
 
 ## Import your first recipe
 
-Start with a dry run. This retrieves the page and generates the recipe, but does not upload anything:
-
-```bash
-smart-recipe import-url "https://example.com/recipe" --dry-run
-```
-
-When the result looks reasonable, create a Monsieur Cuisine draft:
+Just run:
 
 ```bash
 smart-recipe import-url "https://example.com/recipe"
+```
+
+SmartRecipe will walk you through everything interactively — API key, recipe generation, a preview in the terminal, and whether to upload.
+
+If you want to skip every prompt and always upload automatically:
+
+```bash
+smart-recipe import-url "https://example.com/recipe" --yes
+```
+
+If you want to generate the recipe and inspect it without uploading:
+
+```bash
+smart-recipe import-url "https://example.com/recipe" --dry-run
 ```
 
 After upload, SmartRecipe prints the draft URL. Open it, review the recipe, adjust anything that needs human judgment, and save it in your Monsieur Cuisine account.
@@ -334,22 +301,23 @@ smart-recipe catalog
 
 ## Common options
 
-| Option                                | What it does                                                                                  |
-| ------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `--dry-run`                           | Generate the recipe without uploading it.                                                     |
-| `--full-response`                     | Print the extracted page summary, generated recipe, payload, image info, and upload response. |
-| `--json`                              | Print machine-readable JSON.                                                                  |
-| `--log-level debug`                   | Show more detailed progress logs.                                                             |
-| `--model <model>`                     | Choose the OpenAI recipe model.                                                               |
-| `--reasoning <effort>`                | Choose OpenAI reasoning effort: `minimal`, `low`, `medium`, or `high`.                        |
-| `--recreate-image`                    | Generate a new recipe image instead of uploading the source image.                            |
-| `--recreate-image-with-source-images` | Generate a new image while using source images as loose context.                              |
-| `--image-model <model>`               | Choose the OpenAI image model.                                                                |
-| `--image-size <size>`                 | Choose generated image size.                                                                  |
-| `--image-quality <quality>`           | Choose image quality: `low`, `medium`, `high`, or `auto`.                                     |
-| `--cookie <cookie>`                   | Pass a Monsieur Cuisine / Lidl Plus cookie directly.                                          |
-| `--prompt-cookie`                     | Ask for a browser cookie if no saved session is available.                                    |
-| `--env <path>`                        | Load a specific env file.                                                                     |
+| Option                                | What it does                                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `--yes`                               | Always upload without asking for confirmation (mirrors the old default behaviour).                     |
+| `--dry-run`                           | Generate and display the recipe without uploading it. Takes priority over `--yes`.                     |
+| `--no-print-markdown`                 | Do not pretty-print the retrieved page markdown before generation.                                     |
+| `--full-response`                     | Print the extracted page summary, generated recipe, payload, image info, and upload response.          |
+| `--json`                              | Print machine-readable JSON (disables all interactive prompts).                                        |
+| `--log-level debug`                   | Show more detailed progress logs.                                                                      |
+| `--model <model>`                     | Choose the OpenAI recipe model.                                                                        |
+| `--reasoning <effort>`                | Choose OpenAI reasoning effort: `minimal`, `low`, `medium`, or `high`.                                 |
+| `--recreate-image`                    | Generate a new recipe image instead of uploading the source image.                                     |
+| `--recreate-image-with-source-images` | Generate a new image while using source images as loose context.                                       |
+| `--image-model <model>`               | Choose the OpenAI image model.                                                                         |
+| `--image-size <size>`                 | Choose generated image size.                                                                           |
+| `--image-quality <quality>`           | Choose image quality: `low`, `medium`, `high`, or `auto`.                                              |
+| `--cookie <cookie>`                   | Pass a Monsieur Cuisine / Lidl Plus cookie directly (skips the auth prompt).                           |
+| `--env <path>`                        | Load a specific env file.                                                                              |
 
 ---
 
@@ -406,23 +374,33 @@ This helps, but it is not a safety guarantee. Treat the generated recipe like a 
 
 ## Example workflow
 
+### First-time setup (fully guided)
+
 ```bash
 # 1. Install
 npm install -g github:gerkensm/smart-recipe
 
-# 2. Add your OpenAI API key
-export OPENAI_API_KEY="sk-..."
-
-# 3. Log in to Monsieur Cuisine
-smart-recipe login-browser --save
-
-# 4. Test a recipe without uploading
-smart-recipe import-url "https://example.com/recipe" --dry-run
-
-# 5. Create a draft
+# 2. Run — SmartRecipe walks you through everything
 smart-recipe import-url "https://example.com/recipe"
+# → asks for your OpenAI API key (and offers to save it)
+# → generates and displays the recipe in the terminal
+# → asks if you want to upload
+# → guides you through Monsieur Cuisine login (and offers to save the session)
+# → prints the draft URL
+```
 
-# 6. Open the printed draft URL and review it
+### Non-interactive / scripted usage
+
+```bash
+# Set credentials once
+export OPENAI_API_KEY="sk-..."
+export MC_COOKIE="..."
+
+# Always upload without prompts
+smart-recipe import-url "https://example.com/recipe" --yes
+
+# Generate only, print JSON
+smart-recipe import-url "https://example.com/recipe" --dry-run --json
 ```
 
 ---
@@ -431,13 +409,15 @@ smart-recipe import-url "https://example.com/recipe"
 
 ### `No Monsieur Cuisine cookie found`
 
-Run:
+If you are running interactively, SmartRecipe will offer browser login or step-by-step cookie instructions automatically when you choose to upload.
+
+To pre-authenticate:
 
 ```bash
 smart-recipe login-browser --save
 ```
 
-Or pass a cookie manually with `--cookie` or `--prompt-cookie`.
+Or pass a cookie manually with `--cookie`.
 
 ### The recipe looks wrong
 
@@ -512,10 +492,10 @@ Main modules:
 
 * `smart-recipe/retriever`: fetch recipe pages, convert them to Markdown, and collect image candidates
 * `smart-recipe/llm`: OpenAI recipe and image generation
-* `smart-recipe/recipes`: typed recipe schema, normalization, validation, Smart mode helpers, and payload creation
+* `smart-recipe/recipes`: typed recipe schema, normalization, validation, Smart mode helpers, payload creation, and terminal pretty-printer
 * `smart-recipe/catalogs`: locale-specific Monsieur Cuisine category and complexity IDs
 * `smart-recipe/mc`: Monsieur Cuisine Smart client, login cookie handling, draft upload, and image upload
-* `smart-recipe/pipeline`: end-to-end URL import flow
+* `smart-recipe/pipeline`: `generateSmartRecipe` and `uploadSmartRecipe` phase functions, plus the legacy combined `importRecipe` wrapper
 
 Run checks:
 
