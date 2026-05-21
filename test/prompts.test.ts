@@ -18,6 +18,19 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("bei der Abfrage zu Aufheizen 'Nein' wählen");
     expect(prompt).toContain("mit dem Spatel nach unten schieben");
     expect(prompt).toContain("{ingredient} schälen/putzen (ergibt ca. {net} g)");
+    expect(prompt).toContain("Nach dem Mixen heißer Zutaten ca. 10 Sekunden warten");
+    expect(prompt).toContain("in ca. 3–4 cm große Stücke schneiden");
+    expect(prompt).toContain("mindestens 500 ml Flüssigkeit in den Mixbehälter geben");
+    expect(prompt).toContain("Öl langsam auf den Deckel gießen");
+    expect(prompt).toContain("Mixbehälter und Rühraufsatz müssen absolut sauber, trocken und fettfrei sein");
+    expect(prompt).toContain("durch die Deckelöffnung auf die laufenden Messer fallen lassen");
+    expect(prompt).toContain("den Messbecher entfernen");
+    expect(prompt).toContain("WEIGHING STATE CONSTRAINT");
+    expect(prompt).toContain("CHOP-SCRAPE-SAUTÉ SEQUENCE");
+    expect(prompt).toContain("TEMPERATURE CEILINGS FOR SENSITIVE INGREDIENTS");
+    expect(prompt).toContain("MOISTURE REDUCTION");
+    expect(prompt).toContain("RAPID COOL-DOWN");
+    expect(prompt).toContain("CONTINUOUS FEEDING");
   });
 
   it("supports the English locale guidance", () => {
@@ -31,6 +44,13 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("scrape down the sides of the bowl using the spatula");
     expect(prompt).toContain("GROSS VS. NET WEIGHT RULE");
     expect(prompt).toContain("Peel/trim {ingredient} (yields approx. {net} g)");
+    expect(prompt).toContain("After pureeing hot contents, wait about 10 seconds");
+    expect(prompt).toContain("cut into pieces of approx. 3-4 cm");
+    expect(prompt).toContain("add at least 500 ml of liquid to the mixing bowl");
+    expect(prompt).toContain("slowly pour the oil onto the lid so it trickles past the measuring cup");
+    expect(prompt).toContain("The mixing bowl and butterfly whisk must be absolutely clean, dry, and fat-free");
+    expect(prompt).toContain("drop through the lid opening onto the running blades");
+    expect(prompt).toContain("remove the measuring cup");
   });
 
   it("includes accessory and hardware rules with de-DE device terms", () => {
@@ -45,6 +65,10 @@ describe("LLM prompt guidance", () => {
     expect(rules).toContain("den Kocheinsatz mithilfe des Spatels herausnehmen");
     expect(rules).toContain("den Kocheinsatz als Spritzschutz auf den Deckel setzen");
     expect(rules).toContain("hotter than 60 C");
+    expect(rules).toContain("den Messbecher entfernen");
+    expect(rules).toContain("Nach dem Mixen heißer Zutaten ca. 10 Sekunden warten");
+    expect(rules).toContain("in ca. 3–4 cm große Stücke schneiden");
+    expect(rules).toContain("mindestens 500 ml");
   });
 
   it("builds recipe image prompts from recipe and page context", () => {

@@ -29,6 +29,13 @@ export interface LocaleText {
     liftSimmeringBasket: string;
     useBasketAsSplashGuard: string;
     grossNetWeightTemplate: string;
+    hotPureeingSafety: string;
+    preCutIngredients: string;
+    minLiquidSimmeringBasket: string;
+    emulsionOilDrip: string;
+    cleanDryFatFree: string;
+    dropOntoRunningBlades: string;
+    removeMeasuringCup: string;
   };
 }
 
@@ -85,7 +92,14 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       spatulaScrape: "stěrkou setřete stěny nádoby dolů",
       liftSimmeringBasket: "vyjměte vařicí košík pomocí stěrky",
       useBasketAsSplashGuard: "položte vařicí košík na víko jako ochranu proti vystříknutí",
-      grossNetWeightTemplate: "Oloupat/očistit {ingredient} (cca {net} g). Do mixovací nádoby přidejte {net} g připraveného/ých {ingredient}."
+      grossNetWeightTemplate: "Oloupat/očistit {ingredient} (cca {net} g). Do mixovací nádoby přidejte {net} g připraveného/ých {ingredient}.",
+      hotPureeingSafety: "Po mixování horkých ingrediencí vyčkejte cca 10 sekund před otevřením víka.",
+      preCutIngredients: "nakrájet na kousky o velikosti cca 3-4 cm",
+      minLiquidSimmeringBasket: "přidat nejméně 500 ml tekutiny do mixovací nádoby",
+      emulsionOilDrip: "pomalé nalévání oleje na víko, aby stékal kolem odměrky do mixovací nádoby",
+      cleanDryFatFree: "Mixovací nádoba a metla musí být naprosto čisté, suché a bez tuku.",
+      dropOntoRunningBlades: "vhodit otvorem ve víku na běžící nože",
+      removeMeasuringCup: "vyjmout odměrku"
     }
   },
   "pl-PL": {
@@ -140,7 +154,14 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       spatulaScrape: "zgarnąć składniki szpatułką ze ścianek naczynia",
       liftSimmeringBasket: "wyjąć koszyczek za pomocą szpatułki",
       useBasketAsSplashGuard: "nałożyć koszyczek na pokrywę jako osłonę przed pryskaniem",
-      grossNetWeightTemplate: "Obrać/oczyścić {ingredient} (daje ok. {net} g). Dodać {net} g przygotowanego/ych {ingredient} do naczynia."
+      grossNetWeightTemplate: "Obrać/oczyścić {ingredient} (daje ok. {net} g). Dodać {net} g przygotowanego/ych {ingredient} do naczynia.",
+      hotPureeingSafety: "Po miksowaniu gorących składników odczekać ok. 10 sekund przed otwarciem pokrywy.",
+      preCutIngredients: "pokroić na kawałki o wielkości ok. 3-4 cm",
+      minLiquidSimmeringBasket: "dodać co najmniej 500 ml płynu do naczynia miksującego",
+      emulsionOilDrip: "powoli wlewać olej na pokrywę, tak aby ściekał obok miarki do naczynia",
+      cleanDryFatFree: "Naczynie miksujące i motylek muszą być całkowicie czyste, suche i wolne od tłuszczu.",
+      dropOntoRunningBlades: "wrzucić przez otwór w pokrywie na obracające się noże",
+      removeMeasuringCup: "wyjąć miarkę"
     }
   },
   "de-DE": {
@@ -195,7 +216,14 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       spatulaScrape: "mit dem Spatel nach unten schieben",
       liftSimmeringBasket: "den Kocheinsatz mithilfe des Spatels herausnehmen",
       useBasketAsSplashGuard: "den Kocheinsatz als Spritzschutz auf den Deckel setzen",
-      grossNetWeightTemplate: "{ingredient} schälen/putzen (ergibt ca. {net} g). {net} g vorbereitete(s) {ingredient} in den Mixbehälter geben."
+      grossNetWeightTemplate: "{ingredient} schälen/putzen (ergibt ca. {net} g). {net} g vorbereitete(s) {ingredient} in den Mixbehälter geben.",
+      hotPureeingSafety: "Nach dem Mixen heißer Zutaten ca. 10 Sekunden warten, bevor der Deckel geöffnet wird.",
+      preCutIngredients: "in ca. 3–4 cm große Stücke schneiden",
+      minLiquidSimmeringBasket: "mindestens 500 ml Flüssigkeit in den Mixbehälter geben",
+      emulsionOilDrip: "Öl langsam auf den Deckel gießen, sodass es am Messbecher vorbei in den Mixbehälter träufelt",
+      cleanDryFatFree: "Mixbehälter und Rühraufsatz müssen absolut sauber, trocken und fettfrei sein.",
+      dropOntoRunningBlades: "durch die Deckelöffnung auf die laufenden Messer fallen lassen",
+      removeMeasuringCup: "den Messbecher entfernen"
     }
   },
   "fr-FR": {
@@ -250,7 +278,14 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       spatulaScrape: "racler les parois à l'aide de la spatule",
       liftSimmeringBasket: "retirer le panier cuisson à l'aide de la spatule",
       useBasketAsSplashGuard: "placer le panier cuisson sur le couvercle pour éviter les projections",
-      grossNetWeightTemplate: "Éplucher/parer {ingredient} (donne environ {net} g). Ajouter {net} g de {ingredient} préparé(s) dans le bol."
+      grossNetWeightTemplate: "Éplucher/parer {ingredient} (donne environ {net} g). Ajouter {net} g de {ingredient} préparé(s) dans le bol.",
+      hotPureeingSafety: "Après avoir mixé des ingrédients chauds, attendre environ 10 secondes avant d'ouvrir le couvercle.",
+      preCutIngredients: "couper en morceaux d'environ 3 à 4 cm",
+      minLiquidSimmeringBasket: "ajouter au moins 500 ml de liquide dans le bol de mixage",
+      emulsionOilDrip: "verser lentement l'huile sur le couvercle pour qu'elle s'écoule le long du gobelet doseur",
+      cleanDryFatFree: "Le bol de mixage et le fouet doivent être absolument propres, secs et sans trace de graisse.",
+      dropOntoRunningBlades: "insérer par l'orifice du couvercle sur les couteaux en marche",
+      removeMeasuringCup: "retirer le gobelet doseur"
     }
   },
   "en-US": {
@@ -305,7 +340,14 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       spatulaScrape: "scrape down the sides of the bowl using the spatula",
       liftSimmeringBasket: "remove the simmering basket using the spatula",
       useBasketAsSplashGuard: "place the simmering basket on the lid as a splash guard",
-      grossNetWeightTemplate: "Peel/trim {ingredient} (yields approx. {net} g). Add {net} g prepared {ingredient} to the bowl."
+      grossNetWeightTemplate: "Peel/trim {ingredient} (yields approx. {net} g). Add {net} g prepared {ingredient} to the bowl.",
+      hotPureeingSafety: "After pureeing hot contents, wait about 10 seconds before opening the lid.",
+      preCutIngredients: "cut into pieces of approx. 3-4 cm",
+      minLiquidSimmeringBasket: "add at least 500 ml of liquid to the mixing bowl",
+      emulsionOilDrip: "slowly pour the oil onto the lid so it trickles past the measuring cup into the bowl",
+      cleanDryFatFree: "The mixing bowl and butterfly whisk must be absolutely clean, dry, and fat-free.",
+      dropOntoRunningBlades: "drop through the lid opening onto the running blades",
+      removeMeasuringCup: "remove the measuring cup"
     }
   },
   "it-IT": {
@@ -360,7 +402,14 @@ export const localeTexts: Record<SupportedLocale, LocaleText> = {
       spatulaScrape: "spingere verso il basso con la spatola",
       liftSimmeringBasket: "rimuovere il cestello di cottura con la spatola",
       useBasketAsSplashGuard: "posizionare il cestello di cottura sul coperchio come paraspruzzi",
-      grossNetWeightTemplate: "Sbucciare/pulire {ingredient} (circa {net} g). Aggiungere {net} g di {ingredient} preparato/i nel boccale."
+      grossNetWeightTemplate: "Sbucciare/pulire {ingredient} (circa {net} g). Aggiungere {net} g di {ingredient} preparato/i nel boccale.",
+      hotPureeingSafety: "Dopo aver frullato ingredienti caldi, attendere circa 10 secondi prima di aprire il coperchio.",
+      preCutIngredients: "tagliare a pezzi di circa 3-4 cm",
+      minLiquidSimmeringBasket: "aggiungere almeno 500 ml di liquido nel boccale",
+      emulsionOilDrip: "versare lentamente l'olio sul coperchio in modo che coli lungo il misurino nel boccale",
+      cleanDryFatFree: "Il boccale e la frusta devono essere perfettamente puliti, asciutti e privi di grasso.",
+      dropOntoRunningBlades: "far cadere attraverso il foro del coperchio sulle lame in movimento",
+      removeMeasuringCup: "rimuovere il misurino"
     }
   }
 };

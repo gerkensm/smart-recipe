@@ -27,7 +27,10 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
   }
 
   async generate(page: RetrievedRecipePage, options: RecipeGenerationOptions = {}): Promise<RecipeInput> {
-    const finalOptions = { ...this.defaults, ...options };
+    const cleanOptions = Object.fromEntries(
+      Object.entries(options).filter(([_, v]) => v !== undefined)
+    );
+    const finalOptions = { ...this.defaults, ...cleanOptions };
     let feedback: { errors: string[]; previous: unknown } | undefined;
 
     for (let attempt = 0; attempt <= finalOptions.maxCorrectionAttempts; attempt += 1) {
@@ -118,9 +121,10 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
  * Checks that none of the recipe steps use a mode that was excluded for this generation run.
  * Returns an array of human-readable error strings suitable for feeding back to the LLM.
  */
-function validateExcludedModes(output: unknown, excludeModes: string[]): string[] {
-  if (!excludeModes.length || typeof output !== "object" || !output) return [];
-  const excluded = new Set(excludeModes);
+function validateExcludedModes(output: unknown, excludeModes: string[] = []): string[] {
+  const finalExcludeModes = excludeModes ?? [];
+  if (!finalExcludeModes.length || typeof output !== "object" || !output) return [];
+  const excluded = new Set(finalExcludeModes);
   const errors: string[] = [];
   const steps: unknown[] = (output as any)?.servingSize?.steps ?? [];
   steps.forEach((step: any, index: number) => {
