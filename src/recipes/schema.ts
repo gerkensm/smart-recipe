@@ -373,7 +373,31 @@ export const RecipeInputSchema = Type.Object(
       description: "Draft is safest for generated recipes."
     })),
     categoryIds: Type.Array(
-      Type.Union(Object.values(categoryMeta).map((meta) => Type.Literal(meta.id))),
+      Type.Union([
+        Type.Literal(220),
+        Type.Literal(228),
+        Type.Literal(236),
+        Type.Literal(244),
+        Type.Literal(252),
+        Type.Literal(260),
+        Type.Literal(268),
+        Type.Literal(276),
+        Type.Literal(284),
+        Type.Literal(308),
+        Type.Literal(316),
+        Type.Literal(324),
+        Type.Literal(332),
+        Type.Literal(340),
+        Type.Literal(348),
+        Type.Literal(471),
+        Type.Literal(472),
+        Type.Literal(473),
+        Type.Literal(498),
+        Type.Literal(499),
+        Type.Literal(554),
+        Type.Literal(579),
+        Type.Literal(588)
+      ]),
       {
         description: `Category IDs. Available categories: ${Object.entries(categoryMeta)
           .map(([key, meta]) => `${meta.id} (${key}: ${meta.description})`)
