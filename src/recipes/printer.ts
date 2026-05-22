@@ -2,7 +2,7 @@ import type { RecipeInput } from "./schema.js";
 import { localeComplexityIds } from "../catalogs/catalogs.js";
 
 const ansi = {
-  reset: "\x1b[0m",
+  reset: "\x1b[0m\x1b[24m",
   bold: "\x1b[1m",
   dim: "\x1b[2m",
   italic: "\x1b[3m",

@@ -181,7 +181,7 @@ async function runImport(
     process.env.OPENAI_API_KEY = apiKey.trim();
 
     const saveKey = await confirm({
-      message: "  Save this key to ~/.smart-recipe for future use?",
+      message: "  Save this key to ~/.smart-recipe?",
       default: true
     });
     if (saveKey) {
@@ -321,14 +321,14 @@ async function resolveAuthInteractively(
     message: "  How would you like to authenticate?",
     choices: [
       {
-        name: "Browser login  (opens a Lidl Plus login window)",
+        name: "Browser login  (opens Lidl Plus login window)",
         value: "browser" as const,
-        description: "A small Chromium window opens so you can sign in with your Lidl Plus account."
+        description: "A small Chromium window opens so you can\nsign in with your Lidl Plus account."
       },
       {
-        name: "Paste cookie   (supply a Cookie header manually)",
+        name: "Paste cookie   (enter Cookie header manually)",
         value: "cookie" as const,
-        description: "Open monsieur-cuisine.com in your browser, copy the Cookie header from DevTools, and paste it here."
+        description: "Open monsieur-cuisine.com in your browser,\ncopy the Cookie header from DevTools, and\npaste it here."
       }
     ]
   });
@@ -360,7 +360,7 @@ async function attemptBrowserLogin(isInteractive: boolean): Promise<import("../m
   if (isInteractive) {
     console.log();
     const saveCookie = await confirm({
-      message: "  Save this session cookie to ~/.smart-recipe for future use?",
+      message: "  Save this session cookie to ~/.smart-recipe?",
       default: true
     });
     if (saveCookie) {
@@ -391,7 +391,7 @@ async function promptForManualCookie(): Promise<import("../mc/auth.js").AuthProv
   });
 
   const saveCookie = await confirm({
-    message: "  Save this cookie to ~/.smart-recipe for future use?",
+    message: "  Save this cookie to ~/.smart-recipe?",
     default: true
   });
   if (saveCookie) {
