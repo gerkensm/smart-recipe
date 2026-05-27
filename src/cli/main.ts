@@ -4,7 +4,51 @@ import os from "node:os";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { Command } from "commander";
-import { confirm, input, password, select } from "@inquirer/prompts";
+import {
+  confirm as inquirerConfirm,
+  input as inquirerInput,
+  password as inquirerPassword,
+  select as inquirerSelect
+} from "@inquirer/prompts";
+import fs from "node:fs";
+import tty from "node:tty";
+
+let ttyStream: tty.ReadStream | undefined;
+
+function getInteractiveInput() {
+  if (process.platform === "win32") {
+    return process.stdin;
+  }
+  // If stdin has ended (e.g. after pasting and Ctrl-D), we must read from /dev/tty
+  if ((process.stdin as any).readableEnded || !(process.stdin as any).readable) {
+    if (!ttyStream) {
+      try {
+        const fd = fs.openSync("/dev/tty", "r");
+        ttyStream = new tty.ReadStream(fd);
+      } catch (err) {
+        return process.stdin;
+      }
+    }
+    return ttyStream;
+  }
+  return process.stdin;
+}
+
+function confirm(options: Parameters<typeof inquirerConfirm>[0]) {
+  return inquirerConfirm(options, { input: getInteractiveInput() });
+}
+
+function input(options: Parameters<typeof inquirerInput>[0]) {
+  return inquirerInput(options, { input: getInteractiveInput() });
+}
+
+function password(options: Parameters<typeof inquirerPassword>[0]) {
+  return inquirerPassword(options, { input: getInteractiveInput() });
+}
+
+function select<T>(options: Parameters<typeof inquirerSelect<T>>[0]) {
+  return inquirerSelect<T>(options, { input: getInteractiveInput() });
+}
 import { loadDotEnv, upsertDotEnvValue } from "../config/env.js";
 import { categoryPromptText, plannedLocales, supportedLocales } from "../catalogs/index.js";
 import { buildRecipeInstructions } from "../llm/prompts.js";
@@ -246,17 +290,58 @@ async function runImport(
   }
 
   // ── Step 5: Resolve authentication ───────────────────────────────────────
-  const authProvider = await resolveAuthInteractively(options, isInteractive);
+  let authProvider = await resolveAuthInteractively(options, isInteractive);
 
   // ── Step 6: Upload ────────────────────────────────────────────────────────
-  const uploadResult = await uploadSmartRecipe({
-    page: generated.page,
-    recipeInput: generated.recipeInput,
-    cookie: options.cookie ?? process.env.MC_COOKIE,
-    authProvider,
-    imageProvider,
-    logger
-  });
+  let uploadResult;
+  try {
+    uploadResult = await uploadSmartRecipe({
+      page: generated.page,
+      recipeInput: generated.recipeInput,
+      cookie: options.cookie ?? process.env.MC_COOKIE,
+      authProvider,
+      imageProvider,
+      logger
+    });
+  } catch (error) {
+    const isExpiredToken =
+      error instanceof MonsieurCuisineApiError &&
+      (error.status === 401 ||
+        error.code === 110002 ||
+        (error.response &&
+          typeof error.response === "object" &&
+          (error.response as any).message === "ExpiredAuthCookieException"));
+
+    if (isInteractive && isExpiredToken) {
+      console.log("\n  \x1b[31m✗ Monsieur Cuisine session has expired or is invalid.\x1b[0m");
+      console.log("  Please authenticate to obtain a new session.");
+
+      // Clear current expired session cookies to force fresh interactive auth
+      delete process.env.MC_COOKIE;
+      const oldOptionsCookie = options.cookie;
+      options.cookie = undefined;
+
+      // Ask for credentials / cookie again
+      authProvider = await resolveAuthInteractively(options, isInteractive);
+
+      // Attempt upload again with the new session
+      const session = await authProvider.getSession();
+      const newCookie = session.cookie;
+      process.env.MC_COOKIE = newCookie;
+
+      logger.info("retrying Monsieur Cuisine upload with new session");
+      uploadResult = await uploadSmartRecipe({
+        page: generated.page,
+        recipeInput: generated.recipeInput,
+        cookie: newCookie,
+        authProvider,
+        imageProvider,
+        logger
+      });
+    } else {
+      throw error;
+    }
+  }
 
   const fullResult = {
     page: generated.page,
