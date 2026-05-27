@@ -68,7 +68,7 @@ const recipeFixture = {
       {
         title: "Cook",
         description: "Cook and blend until smooth.",
-        mode: { type: "none" }
+        mode: { type: "none" as const }
       }
     ]
   }

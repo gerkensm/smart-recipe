@@ -5,12 +5,15 @@ import { RecipeInputSchema } from "../src/recipes/schema.js";
 describe("OpenAI strict schema formatting", () => {
   it("keeps mode unions nested under an object root", () => {
     const schema = makeOpenAIStrictSchema(RecipeInputSchema);
-    const mode = (((schema.properties as any).servingSize.properties.steps.items.properties as any).mode ?? {}) as any;
+    const stepsItems = (schema.properties as any).servingSize.properties.steps.items;
+    const mode0 = stepsItems.anyOf[0].properties.mode;
+    const mode1 = stepsItems.anyOf[1].properties.mode;
 
     expect(schema.type).toBe("object");
     expect(schema.anyOf).toBeUndefined();
     expect(schema.required).toContain("status");
-    expect(mode.anyOf).toHaveLength(20);
+    expect(mode0.anyOf).toHaveLength(3);
+    expect(mode1.anyOf).toHaveLength(17);
   });
 
   it("converts TypeBox const literals to enums for OpenAI", () => {
@@ -18,8 +21,9 @@ describe("OpenAI strict schema formatting", () => {
     const values: unknown[] = [];
     collectKeys(schema, "const", values);
 
-    const mode = (((schema.properties as any).servingSize.properties.steps.items.properties as any).mode ?? {}) as any;
-    const manualCooking = mode.anyOf.find((variant: any) => variant.properties?.type?.enum?.[0] === "manualCooking");
+    const stepsItems = (schema.properties as any).servingSize.properties.steps.items;
+    const mode1 = stepsItems.anyOf[1].properties.mode;
+    const manualCooking = mode1.anyOf.find((variant: any) => variant.properties?.type?.enum?.[0] === "manualCooking");
 
     expect(values).toEqual([]);
     expect(manualCooking.properties.type).toEqual({ type: "string", enum: ["manualCooking"] });

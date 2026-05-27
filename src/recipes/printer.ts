@@ -506,7 +506,7 @@ export function formatRecipeTerminal(recipe: RecipeInput): string {
       parts.push(`      ${badge}`);
     }
     
-    const descLines = step.description.split("\n");
+    const descLines = (step.description ?? "").split("\n");
     descLines.forEach((line) => {
       if (line.trim()) {
         parts.push(`      ${line}`);

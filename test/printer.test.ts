@@ -41,6 +41,13 @@ describe("Recipe Terminal Pretty-Printer", () => {
           title: "First Step",
           description: "Do something with the ingredients.",
           mode: {
+            type: "none"
+          }
+        },
+        {
+          title: "Second Step",
+          description: "",
+          mode: {
             type: "manualCooking",
             temperature: 100,
             minutes: 5,
@@ -137,7 +144,8 @@ describe("Recipe Terminal Pretty-Printer", () => {
         ...baseRecipe.servingSize,
         steps: [
           {
-            ...baseRecipe.servingSize.steps[0],
+            ...baseRecipe.servingSize.steps[1],
+            description: "",
             mode: {
               type: "manualCooking",
               temperature: 100,
@@ -169,7 +177,8 @@ describe("Recipe Terminal Pretty-Printer", () => {
         ...baseRecipe.servingSize,
         steps: [
           {
-            ...baseRecipe.servingSize.steps[0],
+            ...baseRecipe.servingSize.steps[1],
+            description: "",
             mode: {
               type: "manualCooking",
               temperature: 100,
@@ -199,7 +208,7 @@ describe("Recipe Terminal Pretty-Printer", () => {
           },
           {
             title: "Roast step",
-            description: "Roast onions.",
+            description: "",
             mode: { type: "roast", temperature: 130, minutes: 8, seconds: 0 }
           },
           {
@@ -209,12 +218,12 @@ describe("Recipe Terminal Pretty-Printer", () => {
           },
           {
             title: "Eggs step",
-            description: "Cook eggs.",
+            description: "",
             mode: { type: "cookingEggs", size: "medium", texture: "waxy_soft" }
           },
           {
             title: "Clean step",
-            description: "Run precleaning.",
+            description: "",
             mode: { type: "precleaning", duration: "short" }
           }
         ]

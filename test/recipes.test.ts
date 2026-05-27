@@ -4,6 +4,7 @@ import { createRecipeUrl } from "../src/mc/urls.js";
 import { createSmartRecipePayload } from "../src/recipes/payload.js";
 import type { CreateSmartRecipePayloadOptions } from "../src/recipes/payload.js";
 import { validateRecipeInput } from "../src/recipes/validation.js";
+import type { RecipeStepInput } from "../src/recipes/types.js";
 
 const recipeInput: CreateSmartRecipePayloadOptions = {
   title: "Tomatensauce",
@@ -33,8 +34,13 @@ const recipeInput: CreateSmartRecipePayloadOptions = {
     ],
     steps: [
       {
+        title: "Tomaten vorbereiten",
+        description: "400 g Tomaten in den Mixbehaelter geben.",
+        mode: { type: "none" as const }
+      },
+      {
         title: "Tomaten garen",
-        description: "400 g Tomaten in den Mixbehaelter geben und garen.",
+        description: "",
         mode: { type: "manualCooking" as const, temperature: 100, minutes: 12, seconds: 0, speed: 1, rotationDirection: "right" as const }
       }
     ]
@@ -67,7 +73,7 @@ describe("Smart recipe payloads", () => {
     const payload = createSmartRecipePayload(recipeInput);
     expect(payload.deviceTypeIds).toEqual([13]);
     expect(payload.categoryIds).toEqual([220, 579]);
-    expect((payload.servingSizes[0] as any).steps[0].mode.type).toBe("customized");
+    expect((payload.servingSizes[0] as any).steps[1].mode.type).toBe("customized");
   });
 
   it("uses localized default ingredient group names", () => {
@@ -93,7 +99,7 @@ describe("Smart recipe payloads", () => {
         steps: [
           {
             title: "Ruehren",
-            description: "Schonend ruehren.",
+            description: "",
             mode: { type: "manualCooking", temperature: 0, minutes: 1, seconds: 0, speed: 5, rotationDirection: "left" }
           }
         ]
@@ -137,12 +143,83 @@ describe("Smart recipe payloads", () => {
         steps: [
           {
             title: "Eier kochen",
-            description: "Eier in den Gareinsatz legen und automatisch kochen.",
+            description: "",
             mode: { type: "cookingEggs", size: "medium", texture: "waxy_soft" }
           }
         ]
       }
     });
     expect((payload.servingSizes[0] as any).steps[0].mode.modeSetting.texture).toBe("waxy_soft");
+  });
+
+  it("enforces type-safety on step descriptions for automatic cooking modes in TypeScript", () => {
+    // These assignments compile successfully because descriptions are allowed on none, scale, and turbo modes.
+    const validNoneStep: RecipeStepInput = {
+      title: "Manual Step",
+      description: "Do something manually",
+      mode: { type: "none" }
+    };
+    const validScaleStep: RecipeStepInput = {
+      title: "Weighing Step",
+      description: "Weigh onions",
+      mode: { type: "scale", grams: 100 }
+    };
+    const validTurboStep: RecipeStepInput = {
+      title: "Turbo Step",
+      description: "Pulse turbo",
+      mode: { type: "turbo", seconds: 3 }
+    };
+
+    expect(validNoneStep.title).toBe("Manual Step");
+    expect(validScaleStep.title).toBe("Weighing Step");
+    expect(validTurboStep.title).toBe("Turbo Step");
+
+    // Negative compiler assertions (checked by tsc compiler via @ts-expect-error):
+    // @ts-expect-error - description must be empty or omitted for manualCooking step
+    const invalidCookingStep: RecipeStepInput = {
+      title: "Cooking Step",
+      description: "Description not allowed here",
+      mode: {
+        type: "manualCooking" as const,
+        temperature: 100 as const,
+        minutes: 5,
+        seconds: 0,
+        speed: 1,
+        rotationDirection: "right" as const
+      }
+    };
+
+    // @ts-expect-error - description must be empty or omitted for cookingEggs step
+    const invalidEggStep: RecipeStepInput = {
+      title: "Egg Step",
+      description: "Description not allowed here",
+      mode: {
+        type: "cookingEggs" as const,
+        size: "medium" as const,
+        texture: "soft" as const
+      }
+    };
+
+    expect(invalidCookingStep.description).toBe("Description not allowed here");
+    expect(invalidEggStep.description).toBe("Description not allowed here");
+  });
+
+  it("rejects recipe input at runtime if automatic cooking steps contain descriptions", () => {
+    const invalidInput = {
+      ...recipeInput,
+      servingSize: {
+        ...recipeInput.servingSize,
+        steps: [
+          {
+            title: "Tomaten garen",
+            description: "Some description that is forbidden",
+            mode: { type: "manualCooking" as const, temperature: 100, minutes: 12, seconds: 0, speed: 1, rotationDirection: "right" as const }
+          }
+        ]
+      }
+    };
+    const result = validateRecipeInput(invalidInput);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toContain("/servingSize/steps/0 must match a schema in anyOf");
   });
 });

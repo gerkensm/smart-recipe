@@ -24,11 +24,7 @@ export interface RecipeIngredientGroupInput {
 export type PromptModeInput = RecipeInput["servingSize"]["steps"][number]["mode"];
 export type PromptModeType = PromptModeInput["type"];
 
-export interface RecipeStepInput {
-  title: string;
-  description: string;
-  mode: PromptModeInput;
-}
+export type RecipeStepInput = RecipeInput["servingSize"]["steps"][number];
 
 export interface RecipeServingSizeInput {
   amount: number;

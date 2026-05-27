@@ -59,14 +59,20 @@ export function createSmartRecipePayload(options: CreateSmartRecipePayloadOption
             iconUrl: null
           }))
         })),
-        steps: options.servingSize.steps.map((step, index) => ({
-          title: truncate(step.title, 80),
-          description: truncate(step.description, 240),
-          duration: null,
-          mode: promptModeToRawMode(step.mode),
-          videoMedia: null,
-          order: index
-        })),
+        steps: options.servingSize.steps.map((step, index) => {
+          const allowedWithDesc = ["none", "scale", "turbo"];
+          const description = allowedWithDesc.includes(step.mode.type)
+            ? truncate(step.description ?? "", 240)
+            : "";
+          return {
+            title: truncate(step.title, 80),
+            description,
+            duration: null,
+            mode: promptModeToRawMode(step.mode),
+            videoMedia: null,
+            order: index
+          };
+        }),
         order: 0
       }
     ]
