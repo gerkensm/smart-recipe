@@ -70,6 +70,12 @@ export function buildRecipeInstructions(
       "Contrast Examples:\n" +
       "- Standard Linear Flow (Bad): 1. Peel potatoes. 2. Chop carrots. 3. Sauté onions (3 min). 4. Boil everything (20 min).\n" +
       "- Optimized JIT Flow (Good): 1. Sauté onions (3 min). 2. Look-ahead Prep: 'Use the cooking time in the following step to peel the potatoes and chop the carrots.' 3. Boil everything (20 min).",
+    "HUMAN-READABLE ALTERNATIVE INSTRUCTIONS: The 'servingSize.instruction' property must be filled with the complete, continuous textual instructions of the recipe, representing a non-guided alternative version of the recipe shown to humans on the website/app. Follow these strict styling guidelines:\n" +
+      "- Tone and Grammatical Mood: Use the standard recipe tone of the target language (e.g. infinitive verb form at the end of clauses for German/French: 'Den Backofen auf 200 °C vorheizen.', 'Den Wirsing mit der Butter dünsten.'; or imperative form for English: 'Preheat oven to 200 °C.', 'Sauté the cabbage with the butter.').\n" +
+      "- Paragraph Separation: Organize the text into logical cooking paragraphs separated by double newlines (\\n\\n). Each paragraph represents a major phase of the recipe.\n" +
+      "- Settings & Accessories: Include precise machine/accessory settings (e.g. '10 seconds/speed 7' / '10 Sekunden/Stufe 7', and 'sauté mode/120 °C' / 'Anbrat-Taste/120 °C'). Mention accessory changes ('With measuring cup inserted', 'Scrape down using the spatula').\n" +
+      "- Ingredient Quantities: Focus on ingredient names and actions rather than repeating all specific gram quantities (e.g., 'Sauté the cabbage with the butter...' rather than 'Sauté 750 g cabbage with 50 g butter...'), unless it refers to minor seasoning amounts not weighed on the scale (e.g., '½ teaspoon salt' / '½ Teelöffel Salz').\n" +
+      "- Tips Section: If the source has tips, append a capitalized 'TIPS' (or localized equivalent, e.g. 'TIPPS' in German) section at the very end of the string, on its own line, followed by the tips as separate paragraphs.",
     "",
     "Accessory and hardware rules:",
     accessoryHardwareRules(locale),

@@ -499,7 +499,7 @@ export const RecipeInputSchema = Type.Object(
       {
         amount: Type.Integer({ minimum: 1, maximum: 24, description: "Number of servings or units." }),
         unit: Type.String({ minLength: 1, maxLength: 40, description: "Serving unit in the target locale, for example servings, portions, jars, pieces or the local equivalents." }),
-        instruction: Type.String({ maxLength: 240, description: "Optional serving-size note." }),
+        instruction: Type.String({ maxLength: 4000, description: "Complete, continuous textual recipe instructions for human reading (non-guided alternative)." }),
         preparationTime: Type.Integer({ minimum: 1, maximum: 1440, description: "Hands-on preparation time in minutes." }),
         readyInTime: Type.Integer({ minimum: 1, maximum: 2880, description: "Total time until ready, in minutes." }),
         ingredientGroups: Type.Array(RecipeIngredientGroupSchema, { minItems: 1 }),

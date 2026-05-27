@@ -263,7 +263,7 @@ describe("RecipeInput General Schema Types", () => {
       servingSize: {
         amount: 4,
         unit: "portions",
-        instruction: "",
+        instruction: "Den Backofen auf 200 °C vorheizen.\n\nDen Bergkäse entrinden, in 2 × 2 cm große Stücke schneiden und in den Mixbehälter geben. Mit eingesetztem Messbecher 10 Sekunden/Stufe 7 zerkleinern und anschließend umfüllen.\n\nTIPPS\nDazu passen Kartoffeln.",
         preparationTime: 10,
         readyInTime: 30,
         ingredientGroups: [
