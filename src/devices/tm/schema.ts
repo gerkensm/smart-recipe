@@ -13,18 +13,48 @@ const SteamingSpeedSchema = Type.Union([
   Type.Literal("5"),
 ]);
 
+// blend/chop/mix/puree: covers full speed range soft–10
 const BlendSpeedSchema = Type.Union([
+  Type.Literal("soft"),
+  Type.Literal("1"),
+  Type.Literal("1.5"),
+  Type.Literal("2"),
+  Type.Literal("2.5"),
+  Type.Literal("3"),
+  Type.Literal("3.5"),
+  Type.Literal("4"),
+  Type.Literal("4.5"),
+  Type.Literal("5"),
+  Type.Literal("5.5"),
   Type.Literal("6"),
   Type.Literal("6.5"),
   Type.Literal("7"),
   Type.Literal("7.5"),
   Type.Literal("8"),
+  Type.Literal("8.5"),
+  Type.Literal("9"),
+  Type.Literal("9.5"),
+  Type.Literal("10"),
 ]);
 
 const WarmUpSpeedSchema = Type.Union([
   Type.Literal("soft"),
   Type.Literal("1"),
   Type.Literal("2"),
+]);
+
+// Cooking speeds for simmering/heating steps (soft through 5, same range as steaming)
+const CookingSpeedSchema = Type.Union([
+  Type.Literal("soft"),
+  Type.Literal("1"),
+  Type.Literal("1.5"),
+  Type.Literal("2"),
+  Type.Literal("2.5"),
+  Type.Literal("3"),
+  Type.Literal("3.5"),
+  Type.Literal("4"),
+  Type.Literal("4.5"),
+  Type.Literal("5"),
 ]);
 
 const BrowningTempSchema = Type.Union([
@@ -58,6 +88,16 @@ export const CookidooStepModeSchema = Type.Union([
     type: Type.Literal("warmUp"),
     temperature: Type.Integer({ minimum: 37, maximum: 100, description: "Target warming temperature in Celsius." }),
     speed: WarmUpSpeedSchema,
+  }, { additionalProperties: false }),
+
+  // General cooking/simmering: temperature 37-120°C, with time, speed, and optional direction.
+  // Use for steps like "25 Min./100°C/Linkslauf/Stufe 1 garen" (time + temp + speed + direction).
+  Type.Object({
+    type: Type.Literal("cook"),
+    time: Type.Integer({ minimum: 1, description: "Cooking time in seconds." }),
+    temperature: Type.Integer({ minimum: 37, maximum: 120, description: "Cooking temperature in Celsius." }),
+    speed: CookingSpeedSchema,
+    direction: Type.Optional(Type.Union([Type.Literal("CW"), Type.Literal("CCW")], { description: "CW = Rechtslauf (default), CCW = Linkslauf (reverse, gentle for soups/stews)." })),
   }, { additionalProperties: false }),
 
   Type.Object({

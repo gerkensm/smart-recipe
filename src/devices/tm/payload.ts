@@ -12,6 +12,7 @@ export type ModeName =
   | "blend"
   | "turbo"
   | "warm_up"
+  | "cook"
   | "rice_cooker"
   | "steaming"
   | "browning";
@@ -158,7 +159,9 @@ export function createCookidooMetaPatch(input: CookidooRecipeInput): MetaPatch {
     })),
     yield: {
       value: input.servingSize,
-      unitText: input.servingUnitText,
+      // The Cookidoo API enforces an enum for unitText. "portion" is the only
+      // confirmed valid value (observed from live API responses).
+      unitText: "portion",
     },
     prepTime: input.prepTime * 60,   // convert minutes to seconds
     totalTime: input.totalTime * 60, // convert minutes to seconds
@@ -228,6 +231,18 @@ export function createCookidooInstructions(input: CookidooRecipeInput): Step[] {
             data: {
               temperature: { value: String(m.temperature), unit: "C" },
               speed: m.speed,
+            },
+            position,
+          };
+        } else if (m.type === "cook") {
+          modeAnn = {
+            type: "MODE",
+            name: "cook",
+            data: {
+              time: m.time,
+              temperature: { value: String(m.temperature), unit: "C" },
+              speed: m.speed,
+              ...(m.direction ? { direction: m.direction } : {}),
             },
             position,
           };

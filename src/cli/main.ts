@@ -115,6 +115,7 @@ function addImportOptions(cmd: Command): Command {
     .option("--reasoning <effort>", "OpenAI reasoning effort: minimal, low, medium, high", process.env.OPENAI_REASONING_EFFORT ?? "medium")
     .option("--recreate-image", "Generate a new recipe image with OpenAI instead of uploading the source image")
     .option("--recreate-image-with-source-images", "When recreating the image, send downloaded website images as loose visual context")
+    .option("--no-image", "Skip image generation entirely; upload without an image (skips the image prompt)")
     .option("--image-model <model>", "OpenAI image model", process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2")
     .option("--image-size <size>", "Generated image size", process.env.OPENAI_IMAGE_SIZE ?? "1024x1024")
     .option("--image-quality <quality>", "Generated image quality: low, medium, high, auto", process.env.OPENAI_IMAGE_QUALITY ?? "medium")
@@ -364,16 +365,13 @@ async function runImport(
   }
 
   // ── Step 2: Generate the recipe ───────────────────────────────────────────
-  const shouldRecreateImage = options.recreateImage || options.recreateImageWithSourceImages;
-  const imageProvider = shouldRecreateImage
-    ? new OpenAIRecipeImageGenerator({
-      model: options.imageModel,
-      size: options.imageSize,
-      quality: options.imageQuality,
-      includeSourceImages: Boolean(options.recreateImageWithSourceImages),
-      logger
-    })
-    : undefined;
+  // Image provider is resolved later (Step 4.5), after the user confirms upload.
+  // Pre-compute the flag values here so the logic below is cleaner.
+  const imageExplicitMode: "generate" | "generate-with-sources" | "skip" | null =
+    options.noImage ? "skip"
+    : options.recreateImageWithSourceImages ? "generate-with-sources"
+    : options.recreateImage ? "generate"
+    : null; // null = ask interactively
 
   const excludeModes: string[] = options.excludeModes
     ? options.excludeModes.split(",").map((m: string) => m.trim())
@@ -426,6 +424,52 @@ async function runImport(
     );
     return;
   }
+
+  // ── Step 4.5: Resolve image provider ─────────────────────────────────────
+  let imageMode = imageExplicitMode;
+  if (imageMode === null && isInteractive) {
+    const sourceImageCount = generated.page.images?.filter((img: any) => img.score >= 0.5).length ?? 0;
+    const sourceHint = sourceImageCount > 0
+      ? `  \x1b[2m(${sourceImageCount} potential recipe image${sourceImageCount !== 1 ? "s" : ""} found on the source page)\x1b[0m`
+      : `  \x1b[2m(no suitable source images found on the page)\x1b[0m`;
+    console.log(sourceHint);
+    console.log();
+    const imageChoice = await select<"skip" | "generate" | "generate-with-sources">({
+      message: "  Generate a recipe image?",
+      choices: [
+        {
+          name: "No – use the best image from the source website (if available)",
+          value: "skip" as const,
+        },
+        {
+          name: "Yes – generate a fresh AI image (uses image generation credits)",
+          value: "generate" as const,
+        },
+        ...(
+          sourceImageCount > 0
+            ? [{
+                name: `Yes – generate using website photos as visual reference (${sourceImageCount} image${sourceImageCount !== 1 ? "s" : ""})`,
+                value: "generate-with-sources" as const,
+              }]
+            : []
+        ),
+      ],
+      default: "skip",
+    });
+    imageMode = imageChoice;
+  } else if (imageMode === null) {
+    imageMode = "skip"; // non-interactive default: don't generate
+  }
+
+  const imageProvider = imageMode === "skip" || imageMode === null
+    ? undefined
+    : new OpenAIRecipeImageGenerator({
+        model: options.imageModel,
+        size: options.imageSize,
+        quality: options.imageQuality,
+        includeSourceImages: imageMode === "generate-with-sources",
+        logger,
+      });
 
   // ── Step 5: Resolve authentication ───────────────────────────────────────
   let authProvider = await resolveAuthInteractively(options, isInteractive, adapter);
@@ -932,6 +976,28 @@ program
       totalPage,
       recipes: formattedRecipes
     }, program.optsWithGlobals().json);
+  });
+
+program
+  .command("get-recipe")
+  .description("Fetch raw JSON of a single Cookidoo recipe by ID (useful for debugging API field constraints).")
+  .argument("<id>", "Recipe ID (e.g. 01KB04WSJP4SHNBKJK4H4FT0PZ)")
+  .option("--device <device>", "Target device: 'mc' or 'tm'", getTargetDevice("tm"))
+  .option("--cookie <cookie>", "Cookie header")
+  .option("--public", "Fetch from the public created-recipes endpoint instead of own")
+  .action(async (id, options) => {
+    const cookieKey = options.device === "tm" ? "TM_COOKIE" : "MC_COOKIE";
+    const activeCookie = options.cookie ?? process.env[cookieKey];
+    if (!activeCookie) {
+      throw new Error(`No ${options.device === "tm" ? "Thermomix" : "Monsieur Cuisine"} cookie found. Use login-browser command first.`);
+    }
+    const locale = (process.env.TM_LOCALE ?? "de-DE") as string;
+    const client = new (await import("../devices/tm/client.js")).CookidooClient({ cookie: activeCookie, locale });
+    const path = options.public
+      ? `/created-recipes/public/recipes/${client.language}/${encodeURIComponent(id)}`
+      : `/created-recipes/${client.language}/${encodeURIComponent(id)}`;
+    const result = await client.request<any>({ method: "GET", path });
+    printOutput(result, program.optsWithGlobals().json);
   });
 
 program.parseAsync().catch((error) => {

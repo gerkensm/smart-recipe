@@ -125,6 +125,9 @@ export class CookidooClient {
     formData.append("signature", options.signature);
     formData.append("source", options.source);
     formData.append("custom_coordinates", options.customCoordinates);
+    // upload_preset is excluded from the signature (invalid-signature-params) but must
+    // still be sent so Cloudinary applies the correct signed preset configuration.
+    formData.append("upload_preset", "prod-customer-recipe-signed");
 
     const res = await this.fetchImpl("https://api-eu.cloudinary.com/v1_1/vorwerk-users-gc/image/upload", {
       method: "POST",

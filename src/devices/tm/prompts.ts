@@ -21,8 +21,8 @@ export function buildCookidooRecipeInstructions(
     version === "TM5"
       ? "IMPORTANT: Target device is TM5. TM5 does NOT support 'browning' or 'sousVide' modes. Do NOT generate browning or sousVide annotations under any circumstances."
       : version === "TM7"
-      ? "Target device is TM7, which supports all guided modes including browning, steaming, dough, blend, turbo, warmUp, and riceCooker (inheriting all TM6 modes)."
-      : "Target device is TM6, which supports all guided modes including browning, steaming, dough, blend, turbo, warmUp, and riceCooker.",
+      ? "Target device is TM7, which supports all guided modes including browning, steaming, cook, dough, blend, turbo, warmUp, and riceCooker (inheriting all TM6 modes)."
+      : "Target device is TM6, which supports all guided modes including browning, steaming, cook, dough, blend, turbo, warmUp, and riceCooker.",
     "",
     excludeModes.length > 0
       ? `IMPORTANT: The following modes are excluded by user preference: ${excludeModes.join(", ")}. Do NOT use them.`
@@ -41,19 +41,35 @@ export function buildCookidooRecipeInstructions(
     "- To make a step interactive on the Thermomix screen, add a modeAnnotation containing `matchedSubstring` and its parameters.",
     "- CRITICAL: `matchedSubstring` MUST exist in the step `text` EXACTLY, character-for-character, including case and punctuation. If the substring is not found, the annotation will fail to attach.",
     "- Do NOT annotate basic stirring, mixing, or manual heat steps. Manual mode highlights are crossed out and unclickable in the TM7/Cookidoo UI. Leave basic stirring/cooking instructions as plain text without annotations so users can easily set values manually on the machine.",
-    "- Only use concrete, supported guided modes: steaming, browning, dough, blend, turbo, warmUp, riceCooker.",
+    "- Only use concrete, supported guided modes: cook, steaming, browning, dough, blend, turbo, warmUp, riceCooker.",
     "",
     "GUIDED MODE RULES & CONSTRAINTS:",
-    "1. STEAMING: Use the 'steaming' mode for Varoma cooking. Crucially, steaming mode has NO temperature value field (Varoma temperature is automatic). Speed can be soft, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5. Direction can be CW or CCW.",
-    "2. BROWNING: Only available on TM6 and TM7. Time must be in seconds. Temperature MUST be strictly one of [140, 145, 150, 155, 160] (in Celsius). Power can be 'Gentle'.",
-    "3. DOUGH: For kneading dough. Only requires 'time' in seconds. No speed or temperature parameters are allowed.",
-    "4. BLEND: Speed must be strictly one of ['6', '6.5', '7', '7.5', '8']. Time is in seconds.",
-    "5. TURBO: For short high-speed chopping (1 to 2 seconds). Pulse count can be specified.",
-    "6. WARM UP: Target warming temperature (37 to 100 °C) and speed (soft, 1, 2).",
-    "7. RICE COOKER: No args required.",
+    "1. COOK: Use the 'cook' mode for standard simmering/cooking steps with a specific temperature (37–120°C), time, speed (soft/1–5), and optional direction (CW=Rechtslauf, CCW=Linkslauf). This is the most common mode for soups, sauces, and stews. Example: '25 Min./100°C/Linkslauf/Stufe 1 garen' → cook, time=1500, temperature=100, speed='1', direction='CCW'.",
+    "2. STEAMING: Use the 'steaming' mode for Varoma cooking. Crucially, steaming mode has NO temperature value field (Varoma temperature is automatic). Speed can be soft, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5. Direction can be CW or CCW.",
+    "3. BROWNING: Only available on TM6 and TM7. Time must be in seconds. Temperature MUST be strictly one of [140, 145, 150, 155, 160] (in Celsius). Power can be 'Gentle'.",
+    "4. DOUGH: For kneading dough. Only requires 'time' in seconds. No speed or temperature parameters are allowed.",
+    "5. BLEND: Use for all speed-based operations without temperature: chopping (zerkleinern), mixing (mixen), pureeing (pürieren). Speed can be any value from soft, 1, 1.5 … up to 10. Use the speed from the recipe text exactly. Time is in seconds.",
+    "6. TURBO: For short high-speed chopping (1 to 2 seconds). Pulse count can be specified.",
+    "7. WARM UP: Use only for warming without a duration (just target temperature 37–100°C and speed soft/1/2). If a time is given, use 'cook' instead.",
+    "8. RICE COOKER: No args required.",
     "",
     "EXAMPLES OF NATURAL STEPS WITH CORRECT ANNOTATIONS:",
     JSON.stringify([
+      {
+        text: "Stückige Tomaten, 600 g Wasser, 350 g Kokosmilch, Salz und Pfeffer zugeben. Mit dem Spatel einmal über den Mixtopfboden fahren, damit nichts ansetzt. Gareinsatz statt Messbecher auf den Deckel stellen und 25 Min./100°C/Linkslauf/Stufe 1 garen.",
+        modeAnnotations: [
+          {
+            matchedSubstring: "25 Min./100°C/Linkslauf/Stufe 1 garen",
+            mode: {
+              type: "cook",
+              time: 1500,
+              temperature: 100,
+              speed: "1",
+              direction: "CCW"
+            }
+          }
+        ]
+      },
       {
         text: "Wlej do naczynia 500 g wody, nałóż przystawkę Varoma i gotuj na parze 20 min/Varoma/obr. 1.",
         modeAnnotations: [
@@ -76,6 +92,19 @@ export function buildCookidooRecipeInstructions(
               type: "browning",
               time: 300,
               temperature: 160
+            }
+          }
+        ]
+      },
+      {
+        text: "Zwiebel, Knoblauch und Ingwer in den Mixtopf geben und 5 Sek./Stufe 5 zerkleinern. Mit dem Spatel nach unten schieben.",
+        modeAnnotations: [
+          {
+            matchedSubstring: "5 Sek./Stufe 5 zerkleinern",
+            mode: {
+              type: "blend",
+              time: 5,
+              speed: "5"
             }
           }
         ]
