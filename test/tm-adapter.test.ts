@@ -1,0 +1,528 @@
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { Buffer } from "node:buffer";
+import { ThermomixAdapter } from "../src/devices/tm/adapter.js";
+import { CookidooClient } from "../src/devices/tm/client.js";
+import { CookidooRateLimitError } from "../src/devices/tm/errors.js";
+import type { CookidooRecipeInput } from "../src/devices/tm/schema.js";
+import { getImageDimensions } from "../src/devices/tm/payload.js";
+
+
+const sampleInput: CookidooRecipeInput = {
+  title: "Test Recipe",
+  prepTime: 10,
+  totalTime: 30,
+  servingSize: 4,
+  servingUnitText: "portions",
+  ingredients: ["100g flour", "50g sugar"],
+  steps: [
+    {
+      text: "Put flour and sugar into mixing bowl.",
+      modeAnnotations: []
+    }
+  ],
+  settings: {
+    locale: "de-DE"
+  }
+};
+
+describe("ThermomixAdapter", () => {
+  let adapter: ThermomixAdapter;
+
+  beforeEach(() => {
+    adapter = new ThermomixAdapter();
+  });
+
+  describe("Validation and Normalization", () => {
+    it("validates a correct recipe input structure", () => {
+      const result = adapter.validateInput(sampleInput);
+      expect(result.ok).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it("fails validation if required fields are missing", () => {
+      const invalid = { ...sampleInput, title: undefined };
+      const result = adapter.validateInput(invalid);
+      expect(result.ok).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    it("normalizes and trims string fields", () => {
+      const unnormalized: CookidooRecipeInput = {
+        ...sampleInput,
+        title: "  Test Recipe   ",
+        ingredients: ["  100g flour ", " 50g sugar"],
+        steps: [
+          {
+            text: " Put flour and sugar.  ",
+            modeAnnotations: [
+              {
+                matchedSubstring: "  flour and sugar  ",
+                mode: { type: "dough", time: 60 }
+              }
+            ]
+          }
+        ]
+      };
+      const normalized = adapter.normalizeInput(unnormalized);
+      expect(normalized.title).toBe("Test Recipe");
+      expect(normalized.ingredients).toEqual(["100g flour", "50g sugar"]);
+      expect(normalized.steps[0].text).toBe("Put flour and sugar.");
+      expect(normalized.steps[0].modeAnnotations?.[0].matchedSubstring).toBe("flour and sugar");
+    });
+  });
+
+  describe("Payload generation and modes constraints", () => {
+    it("omits tools array parameter in metadata updates", () => {
+      const payload = adapter.createPayload(sampleInput);
+      expect(payload.meta).toBeDefined();
+      expect((payload.meta as any).tools).toBeUndefined();
+      expect(payload.meta.name).toBe("Test Recipe");
+      expect(payload.meta.prepTime).toBe(600); // 10 minutes to seconds
+    });
+
+    it("calculates correct substring offset and length", () => {
+      const inputWithModes: CookidooRecipeInput = {
+        ...sampleInput,
+        steps: [
+          {
+            text: "Add 100g flour and knead dough for 2 minutes/dough.",
+            modeAnnotations: [
+              {
+                matchedSubstring: "knead dough for 2 minutes/dough",
+                mode: { type: "dough", time: 120 }
+              }
+            ]
+          }
+        ]
+      };
+      const payload = adapter.createPayload(inputWithModes);
+      const step = payload.instructions[0];
+      expect(step.annotations).toBeDefined();
+      expect(step.annotations!.length).toBe(1);
+      expect(step.annotations![0].position).toEqual({
+        offset: 19,
+        length: 31
+      });
+      expect(step.annotations![0].name).toBe("dough");
+      expect(step.annotations![0].data.time).toBe(120);
+    });
+
+    it("drops annotations with non-existent matched substrings gracefully", () => {
+      const inputWithInvalidMode: CookidooRecipeInput = {
+        ...sampleInput,
+        steps: [
+          {
+            text: "Stir the mixture gently.",
+            modeAnnotations: [
+              {
+                matchedSubstring: "non-existent text",
+                mode: { type: "dough", time: 60 }
+              }
+            ]
+          }
+        ]
+      };
+      const payload = adapter.createPayload(inputWithInvalidMode);
+      const step = payload.instructions[0];
+      expect(step.annotations).toBeUndefined();
+    });
+
+    it("sorts annotations by offset ascending", () => {
+      const inputWithMultipleModes: CookidooRecipeInput = {
+        ...sampleInput,
+        steps: [
+          {
+            text: "Knead for 60s, then blend speed 6 for 30s.",
+            modeAnnotations: [
+              {
+                matchedSubstring: "blend speed 6 for 30s",
+                mode: { type: "blend", time: 30, speed: "6" }
+              },
+              {
+                matchedSubstring: "Knead for 60s",
+                mode: { type: "dough", time: 60 }
+              }
+            ]
+          }
+        ]
+      };
+      const payload = adapter.createPayload(inputWithMultipleModes);
+      const annotations = payload.instructions[0].annotations;
+      expect(annotations).toBeDefined();
+      expect(annotations!.length).toBe(2);
+      expect(annotations![0].name).toBe("dough"); // "Knead for 60s" comes first
+      expect(annotations![1].name).toBe("blend"); // "blend speed 6 for 30s" comes second
+    });
+
+    it("enforces steaming mode constraints: omits temperature completely", () => {
+      const inputSteaming: CookidooRecipeInput = {
+        ...sampleInput,
+        steps: [
+          {
+            text: "Steam veggies for 15 min/Varoma/speed 1.",
+            modeAnnotations: [
+              {
+                matchedSubstring: "Steam veggies for 15 min/Varoma/speed 1",
+                mode: {
+                  type: "steaming",
+                  time: 900,
+                  speed: "1",
+                  accessory: "Varoma"
+                }
+              }
+            ]
+          }
+        ]
+      };
+      const payload = adapter.createPayload(inputSteaming);
+      const annotation = payload.instructions[0].annotations![0];
+      expect(annotation.name).toBe("steaming");
+      expect((annotation.data as any).temperature).toBeUndefined();
+      expect(annotation.data.time).toBe(900);
+      expect(annotation.data.speed).toBe("1");
+    });
+
+    it("enforces browning mode constraints: clamps temperature to allowed list", () => {
+      const inputBrowning: CookidooRecipeInput = {
+        ...sampleInput,
+        steps: [
+          {
+            text: "Sear beef 5 min/142C.",
+            modeAnnotations: [
+              {
+                matchedSubstring: "Sear beef 5 min/142C",
+                mode: {
+                  type: "browning",
+                  time: 300,
+                  temperature: 142 as any
+                }
+              }
+            ]
+          },
+          {
+            text: "Sear chicken 5 min/158C.",
+            modeAnnotations: [
+              {
+                matchedSubstring: "Sear chicken 5 min/158C",
+                mode: {
+                  type: "browning",
+                  time: 300,
+                  temperature: 158 as any
+                }
+              }
+            ]
+          }
+        ]
+      };
+      const payload = adapter.createPayload(inputBrowning);
+      const ann1 = payload.instructions[0].annotations![0];
+      const ann2 = payload.instructions[1].annotations![0];
+
+      expect(ann1.name).toBe("browning");
+      expect(ann1.data.temperature!.value).toBe("140"); // 142 is closest to 140
+
+      expect(ann2.name).toBe("browning");
+      expect(ann2.data.temperature!.value).toBe("160"); // 158 is closest to 160
+    });
+  });
+
+  describe("Prompt Instructions Versioning", () => {
+    const originalEnv = process.env.TM_VERSION;
+
+    afterEach(() => {
+      process.env.TM_VERSION = originalEnv;
+    });
+
+    it("generates instructions targeting TM6 by default", () => {
+      const prompt = adapter.getPromptInstructions("de-DE");
+      expect(prompt).toContain("Target: Thermomix (TM6)");
+      expect(prompt).toContain("Target device is TM6");
+    });
+
+    it("generates instructions targeting TM5 when specified", () => {
+      const prompt = adapter.getPromptInstructions("de-DE", { version: "TM5" });
+      expect(prompt).toContain("Target: Thermomix (TM5)");
+      expect(prompt).toContain("Target device is TM5");
+    });
+
+    it("generates instructions targeting TM7 when specified", () => {
+      const prompt = adapter.getPromptInstructions("de-DE", { version: "TM7" });
+      expect(prompt).toContain("Target: Thermomix (TM7)");
+      expect(prompt).toContain("Target device is TM7");
+    });
+
+    it("respects tmVersion option key", () => {
+      const prompt = adapter.getPromptInstructions("de-DE", { tmVersion: "tm7" });
+      expect(prompt).toContain("Target: Thermomix (TM7)");
+      expect(prompt).toContain("Target device is TM7");
+    });
+
+    it("respects process.env.TM_VERSION when no option is provided", () => {
+      process.env.TM_VERSION = "tm5";
+      const prompt = adapter.getPromptInstructions("de-DE");
+      expect(prompt).toContain("Target: Thermomix (TM5)");
+    });
+  });
+
+  describe("Upload client copy rate limit backoff retry", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it("retries copying from public on rate limit status 429 and succeeds on next attempt", async () => {
+      const mockRequest = vi.spyOn(CookidooClient.prototype, "request");
+
+      // First call to request fails with 429 (CookidooRateLimitError)
+      mockRequest.mockRejectedValueOnce(
+        new CookidooRateLimitError({
+          status: 429,
+          body: { code: "tooManyRequests" },
+          url: "/created-recipes/de-DE",
+          method: "POST",
+          retryAfterMs: 30000
+        })
+      );
+
+      // Second, third, and fourth calls succeed (POST copy, PATCH meta, PATCH instructions)
+      mockRequest.mockResolvedValueOnce({ recipeId: "draft-recipe-id-123" });
+      mockRequest.mockResolvedValueOnce({ success: true });
+      mockRequest.mockResolvedValueOnce({ success: true });
+
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn()
+      };
+
+      const uploadPromise = adapter.upload({
+        payload: adapter.createPayload(sampleInput),
+        recipeInput: sampleInput,
+        page: {
+          url: "https://example.com/recipe",
+          finalUrl: "https://example.com/recipe",
+          title: "Test Recipe",
+          markdown: "",
+          html: "",
+          images: []
+        },
+        locale: "de-DE",
+        cookie: "_oauth2_proxy=foo; v-authenticated=bar; v-is-authenticated=true",
+        logger
+      });
+
+      // Wait a tick for the async call to run and trigger the catch block with delay
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Verify that it warned about rate limiting and is now waiting
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ attempt: 1, delayMs: 30000 }),
+        expect.stringContaining("rate limited by Cookidoo copy API")
+      );
+
+      // Advance time by 30 seconds to trigger retry
+      await vi.advanceTimersByTimeAsync(30000);
+
+      const result = await uploadPromise;
+
+      expect(result.recipeUrl).toBe("https://cookidoo.de/created-recipes/de-DE/draft-recipe-id-123");
+      expect(result.draft.id).toBe("draft-recipe-id-123");
+      expect(mockRequest).toHaveBeenCalledTimes(4);
+    });
+
+    it("gives up retrying after maximum attempts exceed", async () => {
+      const mockRequest = vi.spyOn(CookidooClient.prototype, "request");
+
+      // Reject all attempts with 429
+      mockRequest.mockRejectedValue(
+        new CookidooRateLimitError({
+          status: 429,
+          body: { code: "tooManyRequests" },
+          url: "/created-recipes/de-DE",
+          method: "POST",
+          retryAfterMs: 1000
+        })
+      );
+
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn()
+      };
+
+      const uploadPromise = adapter.upload({
+        payload: adapter.createPayload(sampleInput),
+        recipeInput: sampleInput,
+        page: {
+          url: "https://example.com/recipe",
+          finalUrl: "https://example.com/recipe",
+          title: "Test Recipe",
+          markdown: "",
+          html: "",
+          images: []
+        },
+        locale: "de-DE",
+        cookie: "_oauth2_proxy=foo; v-authenticated=bar; v-is-authenticated=true",
+        logger
+      });
+
+      // Prevent unhandled rejection warning in Node.js
+      uploadPromise.catch(() => {});
+
+      // We need to advance timers repeatedly to go through all 4 delays
+      // delays: [30_000, 60_000, 90_000, 120_000]
+      // Let's loop and advance
+      for (let i = 0; i < 5; i++) {
+        await vi.advanceTimersByTimeAsync(120_000);
+      }
+
+      await expect(uploadPromise).rejects.toThrow(CookidooRateLimitError);
+    });
+  });
+
+  describe("Image Upload & Dimensions Parsing", () => {
+    it("correctly parses valid PNG dimensions", () => {
+      const pngHeader = Buffer.alloc(24);
+      pngHeader.writeUInt8(0x89, 0);
+      pngHeader.writeUInt8(0x50, 1);
+      pngHeader.writeUInt8(0x4e, 2);
+      pngHeader.writeUInt8(0x47, 3);
+      pngHeader.writeUInt8(0x0d, 4);
+      pngHeader.writeUInt8(0x0a, 5);
+      pngHeader.writeUInt8(0x1a, 6);
+      pngHeader.writeUInt8(0x0a, 7);
+      pngHeader.writeUInt32BE(800, 16); // width
+      pngHeader.writeUInt32BE(600, 20); // height
+
+      const dims = getImageDimensions(pngHeader);
+      expect(dims).toEqual({ width: 800, height: 600 });
+    });
+
+    it("correctly parses valid JPEG SOF0 dimensions", () => {
+      const jpegHeader = Buffer.alloc(30);
+      jpegHeader.writeUInt8(0xff, 0);
+      jpegHeader.writeUInt8(0xd8, 1); // SOI marker
+      // Segment 1 (e.g. APP0)
+      jpegHeader.writeUInt8(0xff, 2);
+      jpegHeader.writeUInt8(0xe0, 3);
+      jpegHeader.writeUInt16BE(16, 4); // segment length is 16 bytes
+      // Segment 2: SOF0 at offset 2 + 2 + 16 = 20
+      jpegHeader.writeUInt8(0xff, 20);
+      jpegHeader.writeUInt8(0xc0, 21); // SOF0
+      jpegHeader.writeUInt16BE(15, 22); // length
+      jpegHeader.writeUInt8(8, 24); // precision
+      jpegHeader.writeUInt16BE(450, 25); // height
+      jpegHeader.writeUInt16BE(650, 27); // width
+
+      const dims = getImageDimensions(jpegHeader);
+      expect(dims).toEqual({ width: 650, height: 450 });
+    });
+
+    it("returns null for invalid/malformed image buffers", () => {
+      const randomBuffer = Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(getImageDimensions(randomBuffer)).toBeNull();
+    });
+
+    it("orchestrates the Cookidoo image upload flow and patches metadata correctly", async () => {
+      const mockRequest = vi.spyOn(CookidooClient.prototype, "request");
+      const mockSignature = vi.spyOn(CookidooClient.prototype, "requestImageSignature");
+      const mockCloudinary = vi.spyOn(CookidooClient.prototype, "uploadImageToCloudinary");
+
+      // Mock signature call
+      mockSignature.mockResolvedValueOnce({ signature: "test-sig-123" });
+
+      // Mock Cloudinary upload
+      mockCloudinary.mockResolvedValueOnce({
+        public_id: "prod/img/customer-recipe/uploaded-test-image",
+        format: "png",
+      });
+
+      // Mock client request calls (POST copy, PATCH metadata, PATCH instructions)
+      mockRequest.mockResolvedValueOnce({ recipeId: "draft-recipe-id-999" });
+      mockRequest.mockResolvedValueOnce({ success: true });
+      mockRequest.mockResolvedValueOnce({ success: true });
+
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      };
+
+      const pngHeader = Buffer.alloc(24);
+      pngHeader.writeUInt8(0x89, 0);
+      pngHeader.writeUInt8(0x50, 1);
+      pngHeader.writeUInt8(0x4e, 2);
+      pngHeader.writeUInt8(0x47, 3);
+      pngHeader.writeUInt8(0x0d, 4);
+      pngHeader.writeUInt8(0x0a, 5);
+      pngHeader.writeUInt8(0x1a, 6);
+      pngHeader.writeUInt8(0x0a, 7);
+      pngHeader.writeUInt32BE(800, 16); // width
+      pngHeader.writeUInt32BE(600, 20); // height
+
+      const mockImageProvider = {
+        getImage: vi.fn().mockResolvedValue({
+          bytes: pngHeader,
+          source: "mock-url",
+          sourceUrl: "https://example.com/mock.png",
+          contentType: "image/png",
+        }),
+      };
+
+      const result = await adapter.upload({
+        payload: adapter.createPayload(sampleInput),
+        recipeInput: sampleInput,
+        page: {
+          url: "https://example.com/recipe",
+          finalUrl: "https://example.com/recipe",
+          title: "Test Recipe",
+          markdown: "",
+          html: "",
+          images: [],
+        },
+        locale: "de-DE",
+        cookie: "_oauth2_proxy=foo; v-authenticated=bar; v-is-authenticated=true",
+        logger,
+        imageProvider: mockImageProvider,
+      });
+
+      // Verify dimensions calculations: PNG 800x600 -> Centered square of 600x600 starting at X=100, Y=0
+      expect(mockSignature).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customCoordinates: "100,0,600,600",
+          source: "uw",
+        })
+      );
+
+      expect(mockCloudinary).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customCoordinates: "100,0,600,600",
+          source: "uw",
+          signature: "test-sig-123",
+          mimeType: "image/png",
+        })
+      );
+
+      // Verify metadata patch has the image property
+      const patchCall = mockRequest.mock.calls.find((call: any) => call[0]?.method === "PATCH" && call[0]?.body?.name);
+      expect(patchCall).toBeDefined();
+      expect(patchCall![0].body).toEqual(
+        expect.objectContaining({
+          image: "prod/img/customer-recipe/uploaded-test-image.png",
+          isImageOwnedByUser: false,
+        })
+      );
+
+      expect(result.uploadedImage).toEqual({
+        public_id: "prod/img/customer-recipe/uploaded-test-image",
+        format: "png",
+      });
+      expect(result.recipeUrl).toBe("https://cookidoo.de/created-recipes/de-DE/draft-recipe-id-999");
+    });
+  });
+});
+

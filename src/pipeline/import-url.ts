@@ -1,17 +1,15 @@
 import { Buffer } from "node:buffer";
 import { createLogger, type SmartRecipeLogger } from "../logging/logger.js";
 import { OpenAIRecipeGenerator } from "../llm/openai-generator.js";
-import { CookieAuthProvider, type AuthProvider } from "../mc/auth.js";
-import { MonsieurCuisineSmartClient } from "../mc/client.js";
-import { createSmartRecipePayload } from "../recipes/payload.js";
-import type { RecipeInput } from "../recipes/schema.js";
-import type { SmartRecipePayload } from "../recipes/types.js";
+import type { AuthProvider } from "../mc/auth.js";
 import { RecipePageRetriever } from "../retriever/retriever.js";
 import type { RetrievedRecipePage } from "../retriever/types.js";
-import type { ReasoningEffort, RecipeGenerationOptions } from "../llm/types.js";
+import type { ReasoningEffort } from "../llm/types.js";
 import type { SupportedLocale } from "../catalogs/types.js";
 import type { PromptModeType } from "../recipes/types.js";
-import { RetrievedRecipeImageProvider, type RecipeImageAsset, type RecipeImageProvider } from "./images.js";
+import type { RecipeImageProvider } from "./images.js";
+import type { DeviceAdapter } from "../devices/adapter.js";
+import { MonsieurCuisineAdapter } from "../devices/mc/adapter.js";
 
 export interface ImportRecipeFromUrlOptions {
   url: string;
@@ -26,14 +24,15 @@ export interface ImportRecipeFromUrlOptions {
   authProvider?: AuthProvider;
   imageProvider?: RecipeImageProvider;
   logger?: SmartRecipeLogger;
+  adapter?: DeviceAdapter;
 }
 
 export interface ImportRecipeFromUrlResult {
   page: RetrievedRecipePage;
-  recipeInput: RecipeInput;
-  payload: SmartRecipePayload;
-  uploadedImage?: { detailsMediaId: number; thumbnailMediaId: number };
-  recipeImage?: Omit<RecipeImageAsset, "bytes"> & { bytes: number };
+  recipeInput: any;
+  payload: any;
+  uploadedImage?: any;
+  recipeImage?: any;
   draft?: unknown;
   recipeUrl?: string;
 }
@@ -51,32 +50,35 @@ export interface GenerateSmartRecipeOptions {
   reasoningEffort?: ReasoningEffort;
   excludeModes?: PromptModeType[];
   logger?: SmartRecipeLogger;
+  adapter?: DeviceAdapter;
 }
 
 export interface GenerateSmartRecipeResult {
   page: RetrievedRecipePage;
-  recipeInput: RecipeInput;
-  payload: SmartRecipePayload;
+  recipeInput: any;
+  payload: any;
 }
 
 // ─── Upload-only options ──────────────────────────────────────────────────────
 
 export interface UploadSmartRecipeOptions {
   page: RetrievedRecipePage;
-  recipeInput: RecipeInput;
+  recipeInput: any;
   locale?: SupportedLocale;
   cookie?: string;
   authProvider?: AuthProvider;
   imageProvider?: RecipeImageProvider;
   logger?: SmartRecipeLogger;
+  adapter?: DeviceAdapter;
+  payload?: any;
 }
 
 export interface UploadSmartRecipeResult {
-  uploadedImage?: { detailsMediaId: number; thumbnailMediaId: number };
-  recipeImage?: Omit<RecipeImageAsset, "bytes"> & { bytes: number };
+  uploadedImage?: any;
+  recipeImage?: any;
   draft?: unknown;
   recipeUrl?: string;
-  payload: SmartRecipePayload;
+  payload: any;
 }
 
 // ─── Phase 1: Generate ────────────────────────────────────────────────────────
@@ -88,16 +90,18 @@ export interface UploadSmartRecipeResult {
 export async function generateSmartRecipe(options: GenerateSmartRecipeOptions): Promise<GenerateSmartRecipeResult> {
   const logger = options.logger ?? createLogger();
   const locale = options.locale ?? "de-DE";
+  const adapter = options.adapter ?? new MonsieurCuisineAdapter();
 
   logger.info({ model: options.openAIModel, reasoning: options.reasoningEffort }, "generating Smart recipe");
   const generator = new OpenAIRecipeGenerator({
     model: options.openAIModel,
     reasoningEffort: options.reasoningEffort,
     locale,
-    excludeModes: options.excludeModes
+    excludeModes: options.excludeModes,
+    adapter
   });
   const recipeInput = await generator.generate(options.page, { locale, excludeModes: options.excludeModes });
-  const payload = createSmartRecipePayload({ ...recipeInput, thumbnailMediaId: null, detailsImageMediaId: null });
+  const payload = adapter.createPayload(recipeInput);
 
   return { page: options.page, recipeInput, payload };
 }
@@ -105,49 +109,33 @@ export async function generateSmartRecipe(options: GenerateSmartRecipeOptions): 
 // ─── Phase 2: Upload ──────────────────────────────────────────────────────────
 
 /**
- * Uploads a previously generated Smart recipe to Monsieur Cuisine.
+ * Uploads a previously generated Smart recipe to Monsieur Cuisine or Cookidoo.
  * Handles image upload, draft creation, and returns the draft URL.
  */
 export async function uploadSmartRecipe(options: UploadSmartRecipeOptions): Promise<UploadSmartRecipeResult> {
   const logger = options.logger ?? createLogger();
   const locale = options.locale ?? "de-DE";
+  const adapter = options.adapter ?? new MonsieurCuisineAdapter();
 
-  const client = new MonsieurCuisineSmartClient({
-    authProvider: options.authProvider ?? (options.cookie ? new CookieAuthProvider(options.cookie) : undefined),
-    cookie: options.cookie,
+  const payload = options.payload ?? adapter.createPayload(options.recipeInput);
+
+  const uploadResult = await adapter.upload({
+    payload,
+    recipeInput: options.recipeInput,
+    page: options.page,
     locale,
-    logger
+    cookie: options.cookie ?? "",
+    logger,
+    imageProvider: options.imageProvider,
+    authProvider: options.authProvider
   });
 
-  const imageProvider = options.imageProvider ?? new RetrievedRecipeImageProvider();
-  const recipeImage = await imageProvider.getImage(options.page, options.recipeInput);
-
-  let uploadedImage: { detailsMediaId: number; thumbnailMediaId: number } | undefined;
-  let thumbnailMediaId: number | null = null;
-  let detailsImageMediaId: number | null = null;
-
-  if (recipeImage) {
-    logger.info({ imageSource: recipeImage.source, imageUrl: recipeImage.sourceUrl }, "uploading recipe image");
-    uploadedImage = await client.uploadRecipeImage(Buffer.from(recipeImage.bytes), {
-      locale,
-      mimeType: recipeImage.contentType
-    });
-    thumbnailMediaId = uploadedImage.thumbnailMediaId;
-    detailsImageMediaId = uploadedImage.detailsMediaId;
-  }
-
-  const uploadPayload = createSmartRecipePayload({ ...options.recipeInput, thumbnailMediaId, detailsImageMediaId });
-  logger.info({ title: uploadPayload.title }, "creating Monsieur Cuisine draft");
-  const draft = await client.createRecipe(uploadPayload, { locale });
-  const id = typeof draft === "object" && draft && "id" in draft ? Number((draft as { id: unknown }).id) : undefined;
-  const recipeUrl = id ? client.recipeUrl(id, locale) : undefined;
-
   return {
-    uploadedImage,
-    recipeImage: recipeImage ? { ...recipeImage, bytes: recipeImage.bytes.byteLength } : undefined,
-    draft,
-    recipeUrl,
-    payload: uploadPayload
+    uploadedImage: uploadResult.uploadedImage,
+    recipeImage: uploadResult.recipeImage,
+    draft: uploadResult.draft,
+    recipeUrl: uploadResult.recipeUrl,
+    payload: uploadResult.payload
   };
 }
 
@@ -174,7 +162,8 @@ export async function importRecipe(options: ImportRecipeOptions): Promise<Import
     openAIModel: options.openAIModel,
     reasoningEffort: options.reasoningEffort,
     excludeModes: options.excludeModes,
-    logger: options.logger
+    logger: options.logger,
+    adapter: options.adapter
   });
 
   if (!options.dryRun) {
@@ -185,7 +174,9 @@ export async function importRecipe(options: ImportRecipeOptions): Promise<Import
       cookie: options.cookie,
       authProvider: options.authProvider,
       imageProvider: options.imageProvider,
-      logger: options.logger
+      logger: options.logger,
+      adapter: options.adapter,
+      payload
     });
 
     return {
@@ -201,3 +192,4 @@ export async function importRecipe(options: ImportRecipeOptions): Promise<Import
 
   return { page, recipeInput, payload };
 }
+

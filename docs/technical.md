@@ -6,9 +6,11 @@ This document collects implementation-oriented notes for contributors and librar
 
 - `smart-recipe/recipes`: strongly typed recipe input, Smart mode helpers, validation, raw payload creation, and `formatRecipeTerminal` for terminal pretty-printing.
 - `smart-recipe/catalogs`: locale catalog data. Six locales (`de-DE`, `en-US`, `fr-FR`, `it-IT`, `pl-PL`, `cs-CZ`) ship with verified category and complexity IDs.
+- `smart-recipe/devices`: unified `DeviceAdapter` abstraction (`MonsieurCuisineAdapter` and `ThermomixAdapter`) mapping device schemas, constraints, normalization rules, and API clients.
 - `smart-recipe/retriever`: recipe-page retrieval, Markdown conversion and preview image candidate selection.
 - `smart-recipe/llm`: OpenAI recipe and image generation using centralized prompt builders, the model-facing JSON schema and a validation repair loop.
-- `smart-recipe/mc`: Monsieur Cuisine Smart proxy client, cookie auth and image upload.
+- `smart-recipe/mc`: Monsieur Cuisine Smart client, browser login, and draft upload.
+- `smart-recipe/tm`: Thermomix Cookidoo client, authentication proxy, and draft upload.
 - `smart-recipe/pipeline`: two-phase import pipeline — `generateSmartRecipe` and `uploadSmartRecipe` — plus the legacy combined `importRecipe` / `importRecipeFromUrl` wrappers.
 
 ## CLI Architecture
@@ -17,12 +19,13 @@ The CLI (`src/cli/main.ts`) implements an interactive wizard for the `import-url
 
 **Wizard steps:**
 
-1. **OpenAI key** — checks `OPENAI_API_KEY`; if missing, prompts with `password()`, validates format (`sk-…` / `proj-…`), and offers to persist to `~/.smart-recipe` via `upsertDotEnvValue`.
-2. **Generate** — calls `generateSmartRecipe` (LLM only, no upload), then immediately renders with `formatRecipeTerminal`.
-3. **Upload decision** — flag precedence: `--dry-run` > `--yes` > `confirm()` prompt (default: no) > safe no-upload default.
-4. **Auth resolution** — if no cookie is present, `select()` offers browser login or manual paste; browser failure auto-falls back to manual paste with step-by-step instructions.
-5. **Cookie persistence** — offered after both auth paths.
-6. **Upload** — calls `uploadSmartRecipe`, prints the draft URL.
+1. **Target device** — if not set, prompts to choose between `mc` and `tm` (and specific Thermomix model: `tm6` or `tm5`), offering to persist settings to `~/.smart-recipe`.
+2. **OpenAI key** — checks `OPENAI_API_KEY`; if missing, prompts with `password()`, validates format (`sk-…` / `proj-…`), and offers to persist to `~/.smart-recipe` via `upsertDotEnvValue`.
+3. **Generate** — calls `generateSmartRecipe` (LLM only, no upload), then immediately renders with `formatRecipeTerminal`.
+4. **Upload decision** — flag precedence: `--dry-run` > `--yes` > `confirm()` prompt (default: no) > safe no-upload default.
+5. **Auth resolution** — if no cookie is present for the target cooker, `select()` offers browser login or manual paste; browser failure auto-falls back to manual paste with step-by-step instructions.
+6. **Cookie persistence** — offered after both auth paths.
+7. **Upload** — calls `uploadSmartRecipe`, prints the draft URL.
 
 ## Pipeline Split
 
@@ -49,6 +52,15 @@ Output is structured with 2-space → 4-space → 6-space indentation for title/
 The retrieval and pipeline layers pass image candidates through a narrow `RecipeImageProvider` interface. The default provider uploads the best retrieved image, while `OpenAIRecipeImageGenerator` can replace it without changing the recipe or Monsieur Cuisine client APIs.
 
 Image prompt wording lives in `smart-recipe/llm` with the other prompt builders. The image generator handles OpenAI transport, source image upload and returned image bytes.
+
+## Device Adapters & Cookidoo Image Uploads
+
+The application supports uploading recipes and images to both Monsieur Cuisine and Thermomix (Cookidoo) platforms:
+- **Monsieur Cuisine**: Images are uploaded to a native media endpoint and stored as a structured `detailsMediaId`/`thumbnailMediaId`.
+- **Thermomix (Cookidoo)**: Images are uploaded directly to Cookidoo's Cloudinary storage (within their `vorwerk-users-gc` cloud name).
+  - To support the square-only image cropping constraint on Cookidoo without losing the original image, the library parses image buffers at the binary level (extracting PNG or JPEG dimensions without third-party libraries).
+  - It then calculates the largest centered square coordinates (`x,y,w,h`) and uploads the raw image file to Cloudinary along with the calculated `custom_coordinates` parameter (signed by the Cookidoo backend).
+  - This allows the Cookidoo UI/Cloudinary CDN to dynamically render the cropped square image without destructively cropping the master image asset, preserving the original resolution and allowing adjustments in the Cookidoo recipe editor later.
 
 ## Smart Modes
 

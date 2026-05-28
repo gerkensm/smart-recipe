@@ -3,3 +3,6 @@ dist
 .env
 .DS_Store
 coverage
+scratch
+scratch_*.*
+.history
