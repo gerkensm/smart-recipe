@@ -72,6 +72,7 @@ import type { RetrievedRecipePage } from "../retriever/types.js";
 import { createLogger } from "../logging/logger.js";
 import type { ReasoningEffort } from "../llm/types.js";
 import { OpenAIRecipeImageGenerator } from "../llm/openai-image-generator.js";
+import { NullImageProvider } from "../pipeline/images.js";
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 
@@ -123,7 +124,8 @@ function addImportOptions(cmd: Command): Command {
     .option("--exclude-modes <modes>", "Comma-separated list of Smart modes to exclude (e.g. foodProcessor)")
     .option("--device <device>", "Target device: 'mc' or 'tm'")
     .option("--tm-version <version>", "Target Thermomix model: 'tm7', 'tm6', or 'tm5'")
-    .option("--mc-food-processor <boolean>", "Whether you own the Monsieur Cuisine food processor attachment (true/false)");
+    .option("--mc-food-processor <boolean>", "Whether you own the Monsieur Cuisine food processor attachment (true/false)")
+    .option("--extended-modes", "Enable modes not available in My Creations (e.g. cook/Garen for TM). Red in editor but usable via device.");
 }
 
 program
@@ -367,8 +369,8 @@ async function runImport(
   // ── Step 2: Generate the recipe ───────────────────────────────────────────
   // Image provider is resolved later (Step 4.5), after the user confirms upload.
   // Pre-compute the flag values here so the logic below is cleaner.
-  const imageExplicitMode: "generate" | "generate-with-sources" | "skip" | null =
-    options.noImage ? "skip"
+  const imageExplicitMode: "generate" | "generate-with-sources" | "skip" | "none" | null =
+    options.noImage ? "none"
     : options.recreateImageWithSourceImages ? "generate-with-sources"
     : options.recreateImage ? "generate"
     : null; // null = ask interactively
@@ -380,6 +382,14 @@ async function runImport(
   if (targetDevice === "mc" && !mcHasFoodProcessor()) {
     if (!excludeModes.includes("foodProcessor")) {
       excludeModes.push("foodProcessor");
+    }
+  }
+
+  // cook mode (Garen) is not available for My Creations on Cookidoo — exclude by default.
+  // Users can opt in with --extended-modes if they want to experiment.
+  if (targetDevice === "tm" && !options.extendedModes) {
+    if (!excludeModes.includes("cook")) {
+      excludeModes.push("cook");
     }
   }
 
@@ -426,7 +436,7 @@ async function runImport(
   }
 
   // ── Step 4.5: Resolve image provider ─────────────────────────────────────
-  let imageMode = imageExplicitMode;
+  let imageMode: "generate" | "generate-with-sources" | "skip" | "none" | null = imageExplicitMode;
   if (imageMode === null && isInteractive) {
     const sourceImageCount = generated.page.images?.filter((img: any) => img.score >= 0.5).length ?? 0;
     const sourceHint = sourceImageCount > 0
@@ -434,21 +444,25 @@ async function runImport(
       : `  \x1b[2m(no suitable source images found on the page)\x1b[0m`;
     console.log(sourceHint);
     console.log();
-    const imageChoice = await select<"skip" | "generate" | "generate-with-sources">({
-      message: "  Generate a recipe image?",
+    const imageChoice = await select<"skip" | "none" | "generate" | "generate-with-sources">({
+      message: "  Recipe image?",
       choices: [
         {
-          name: "No – use the best image from the source website (if available)",
+          name: "Use the best image from the source website (if available)",
           value: "skip" as const,
         },
         {
-          name: "Yes – generate a fresh AI image (uses image generation credits)",
+          name: "No image – upload without any image",
+          value: "none" as const,
+        },
+        {
+          name: "Generate a fresh AI image (uses image generation credits)",
           value: "generate" as const,
         },
         ...(
           sourceImageCount > 0
             ? [{
-                name: `Yes – generate using website photos as visual reference (${sourceImageCount} image${sourceImageCount !== 1 ? "s" : ""})`,
+                name: `Generate using website photos as visual reference (${sourceImageCount} image${sourceImageCount !== 1 ? "s" : ""})`,
                 value: "generate-with-sources" as const,
               }]
             : []
@@ -458,18 +472,21 @@ async function runImport(
     });
     imageMode = imageChoice;
   } else if (imageMode === null) {
-    imageMode = "skip"; // non-interactive default: don't generate
+    imageMode = "skip"; // non-interactive default: use source image
   }
 
-  const imageProvider = imageMode === "skip" || imageMode === null
-    ? undefined
-    : new OpenAIRecipeImageGenerator({
-        model: options.imageModel,
-        size: options.imageSize,
-        quality: options.imageQuality,
-        includeSourceImages: imageMode === "generate-with-sources",
-        logger,
-      });
+  const imageProvider =
+    imageMode === "none"
+      ? new NullImageProvider()
+      : imageMode === "skip" || imageMode === null
+        ? undefined
+        : new OpenAIRecipeImageGenerator({
+            model: options.imageModel,
+            size: options.imageSize,
+            quality: options.imageQuality,
+            includeSourceImages: imageMode === "generate-with-sources",
+            logger,
+          });
 
   // ── Step 5: Resolve authentication ───────────────────────────────────────
   let authProvider = await resolveAuthInteractively(options, isInteractive, adapter);

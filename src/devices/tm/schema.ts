@@ -2,6 +2,7 @@ import Type, { type Static } from "typebox";
 
 const SteamingSpeedSchema = Type.Union([
   Type.Literal("soft"),
+  Type.Literal("0.5"),
   Type.Literal("1"),
   Type.Literal("1.5"),
   Type.Literal("2"),
@@ -13,28 +14,13 @@ const SteamingSpeedSchema = Type.Union([
   Type.Literal("5"),
 ]);
 
-// blend/chop/mix/puree: covers full speed range soft–10
+// Pürieren: high-speed blending/pureeing only — speed 6–8 as shown in Cookidoo editor
 const BlendSpeedSchema = Type.Union([
-  Type.Literal("soft"),
-  Type.Literal("1"),
-  Type.Literal("1.5"),
-  Type.Literal("2"),
-  Type.Literal("2.5"),
-  Type.Literal("3"),
-  Type.Literal("3.5"),
-  Type.Literal("4"),
-  Type.Literal("4.5"),
-  Type.Literal("5"),
-  Type.Literal("5.5"),
   Type.Literal("6"),
   Type.Literal("6.5"),
   Type.Literal("7"),
   Type.Literal("7.5"),
   Type.Literal("8"),
-  Type.Literal("8.5"),
-  Type.Literal("9"),
-  Type.Literal("9.5"),
-  Type.Literal("10"),
 ]);
 
 const WarmUpSpeedSchema = Type.Union([
@@ -57,6 +43,22 @@ const CookingSpeedSchema = Type.Union([
   Type.Literal("5"),
 ]);
 
+// Discrete temperature steps as shown in Cookidoo editor (37–90°C)
+const WarmUpTempSchema = Type.Union([
+  Type.Literal(37),
+  Type.Literal(40),
+  Type.Literal(45),
+  Type.Literal(50),
+  Type.Literal(55),
+  Type.Literal(60),
+  Type.Literal(65),
+  Type.Literal(70),
+  Type.Literal(75),
+  Type.Literal(80),
+  Type.Literal(85),
+  Type.Literal(90),
+]);
+
 const BrowningTempSchema = Type.Union([
   Type.Literal(140),
   Type.Literal(145),
@@ -69,24 +71,29 @@ const BrowningTempSchema = Type.Union([
 export const CookidooStepModeSchema = Type.Union([
   Type.Object({
     type: Type.Literal("dough"),
-    time: Type.Integer({ minimum: 1, description: "Dough kneading time in seconds." }),
+    time: Type.Integer({ minimum: 1, maximum: 1200, description: "Dough kneading time in seconds. Min 1s, max 20 min (1200s)." }),
   }, { additionalProperties: false }),
 
   Type.Object({
     type: Type.Literal("blend"),
-    time: Type.Optional(Type.Integer({ minimum: 1, description: "Blending time in seconds." })),
+    time: Type.Integer({ minimum: 10, maximum: 300, description: "Blending time in seconds. Min 10s, max 5 min (300s). Cookidoo silently rounds up anything shorter than 10s." }),
     speed: BlendSpeedSchema,
   }, { additionalProperties: false }),
 
   Type.Object({
     type: Type.Literal("turbo"),
-    time: Type.Integer({ minimum: 1, description: "Turbo duration in seconds." }),
-    pulseCount: Type.Optional(Type.Integer({ minimum: 1, description: "Pulse count." })),
+    // pulseDuration: exactly 0.5, 1, or 2 seconds per pulse (as shown in Cookidoo editor)
+    pulseDuration: Type.Union([
+      Type.Literal(0.5),
+      Type.Literal(1),
+      Type.Literal(2),
+    ], { description: "Duration of each turbo pulse: 0.5, 1, or 2 seconds." }),
+    pulseCount: Type.Optional(Type.Integer({ minimum: 1, maximum: 9, description: "Number of pulses (1–9x)." })),
   }, { additionalProperties: false }),
 
   Type.Object({
     type: Type.Literal("warmUp"),
-    temperature: Type.Integer({ minimum: 37, maximum: 100, description: "Target warming temperature in Celsius." }),
+    temperature: WarmUpTempSchema,
     speed: WarmUpSpeedSchema,
   }, { additionalProperties: false }),
 
@@ -106,17 +113,23 @@ export const CookidooStepModeSchema = Type.Union([
 
   Type.Object({
     type: Type.Literal("steaming"),
-    time: Type.Integer({ minimum: 1, description: "Steaming time in seconds." }),
+    time: Type.Integer({ minimum: 1, maximum: 5940, description: "Steaming time in seconds. Min 1s, max 99 min (5940s)." }),
     speed: SteamingSpeedSchema,
     direction: Type.Optional(Type.Union([Type.Literal("CW"), Type.Literal("CCW")])),
-    accessory: Type.Optional(Type.Literal("Varoma")),
+    // Accessory placement: Varoma (top), Gareinsatz (basket inside bowl), both
+    accessory: Type.Optional(Type.Union([
+      Type.Literal("Varoma"),
+      Type.Literal("Gareinsatz"),
+      Type.Literal("both"),
+    ])),
   }, { additionalProperties: false }),
 
   Type.Object({
     type: Type.Literal("browning"),
-    time: Type.Integer({ minimum: 1, description: "Browning time in seconds." }),
+    time: Type.Integer({ minimum: 1, maximum: 1800, description: "Browning time in seconds. Min 1s, max 30 min (1800s)." }),
     temperature: BrowningTempSchema,
-    power: Type.Optional(Type.Literal("Gentle")),
+    // power: Gentle (Leicht) or Intensive (Intensiv) as shown in Cookidoo editor
+    power: Type.Optional(Type.Union([Type.Literal("Gentle"), Type.Literal("Intensive")])),
   }, { additionalProperties: false }),
 ], { description: "TM-specific guided modes." });
 
@@ -171,6 +184,7 @@ export const CookidooRecipeInputSchema = Type.Object({
     minItems: 1,
   }),
   hints: Type.String({
+    maxLength: 4500,
     description: "Optional tips, notes, or serving suggestions from the source recipe. Use an empty string if there are none. Do NOT copy tips that are specific to equipment or techniques not relevant to Thermomix.",
   }),
   settings: Type.Object({

@@ -29,10 +29,10 @@ export interface ModeData {
   speed?: string;
   direction?: Direction;
   temperature?: Temperature;
-  power?: "Gentle";
+  power?: "Gentle" | "Intensive";
   pulseCount?: number;
   pulseCountMax?: number;
-  accessory?: "Varoma";
+  accessory?: "Varoma" | "Gareinsatz" | "both";
 }
 
 export interface ModeAnnotation {
@@ -216,7 +216,7 @@ export function createCookidooInstructions(input: CookidooRecipeInput): Step[] {
             position,
           };
         } else if (m.type === "turbo") {
-          const data: ModeData = { time: m.time };
+          const data: ModeData = { time: m.pulseDuration }; // API field is "time" = per-pulse duration
           if (m.pulseCount !== undefined) {
             data.pulseCount = m.pulseCount;
           }

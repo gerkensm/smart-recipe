@@ -102,8 +102,8 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
             if (m.time) params.push(`${m.time}s`);
             params.push(`Speed ${m.speed}`);
           } else if (m.type === "turbo") {
-            params.push(`${m.time}s`);
-            if (m.pulseCount) params.push(`Pulses: ${m.pulseCount}`);
+            params.push(`${m.pulseDuration}s/pulse`);
+            if (m.pulseCount) params.push(`${m.pulseCount}x`);
           } else if (m.type === "warmUp") {
             params.push(`${m.temperature}°C`);
             params.push(`Speed ${m.speed}`);

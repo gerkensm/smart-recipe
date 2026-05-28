@@ -26,3 +26,10 @@ export class RetrievedRecipeImageProvider implements RecipeImageProvider {
     };
   }
 }
+
+/** Always returns undefined — use when the user explicitly opts out of any image. */
+export class NullImageProvider implements RecipeImageProvider {
+  async getImage(): Promise<undefined> {
+    return undefined;
+  }
+}
