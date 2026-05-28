@@ -114,7 +114,8 @@ export function buildCookidooRecipeInstructions(
     "GENERAL STYLE & CONVENTIONS:",
     "- Paraphrase description and steps to avoid reproducing copyrighted source text. Describe the recipe as if it were original.",
     "- Make an educated guess on nutrients (calories, carbohydrate, fat, protein) if missing from source. Amount must be whole integers.",
-    "- Be specific, concise, and clear. Make the recipe foolproof."
+    "- Be specific, concise, and clear. Make the recipe foolproof.",
+    "- hints: Extract any useful tips, variations, or serving suggestions from the source recipe into the hints field. Omit tips that are irrelevant to Thermomix (e.g. stovetop-only alternatives). Use an empty string if there are no useful tips."
   ];
 
   return instructions.filter(Boolean).join("\n");

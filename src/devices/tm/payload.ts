@@ -68,6 +68,7 @@ export interface MetaPatch {
   totalTime?: number;
   image?: string;
   isImageOwnedByUser?: boolean;
+  hints?: string;
 }
 
 function parsePngDimensions(buffer: Buffer): { width: number; height: number } | null {
@@ -165,6 +166,7 @@ export function createCookidooMetaPatch(input: CookidooRecipeInput): MetaPatch {
     },
     prepTime: input.prepTime * 60,   // convert minutes to seconds
     totalTime: input.totalTime * 60, // convert minutes to seconds
+    hints: input.hints ?? "",             // tips/notes from the source; empty string clears dummy template tips
   };
 }
 

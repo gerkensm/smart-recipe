@@ -170,6 +170,9 @@ export const CookidooRecipeInputSchema = Type.Object({
   steps: Type.Array(CookidooStepSchema, {
     minItems: 1,
   }),
+  hints: Type.String({
+    description: "Optional tips, notes, or serving suggestions from the source recipe. Use an empty string if there are none. Do NOT copy tips that are specific to equipment or techniques not relevant to Thermomix.",
+  }),
   settings: Type.Object({
     locale: Type.String({ description: "Target locale, e.g. de-DE, fr-FR." }),
   }, { additionalProperties: false }),
