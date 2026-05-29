@@ -1674,6 +1674,19 @@ export function parseIsoDuration(duration: string): number {
   return hours * 60 + minutes + Math.round(seconds / 60);
 }
 
+function turboModeFromText(durationText: string, countText?: string) {
+  const pulseDuration = Number(durationText.replace(",", "."));
+  if (pulseDuration !== 0.5 && pulseDuration !== 1 && pulseDuration !== 2) {
+    return undefined;
+  }
+  const pulseCount = countText ? parseInt(countText, 10) : undefined;
+  return {
+    type: "turbo" as const,
+    pulseDuration,
+    ...(pulseCount && pulseCount > 0 ? { pulseCount } : {})
+  };
+}
+
 export function mapOfficialCookidooToInput(recipe: any): CookidooRecipeInput {
   const ingredients = Array.isArray(recipe.recipeIngredient) ? recipe.recipeIngredient : [];
   const steps = Array.isArray(recipe.recipeInstructions) ? recipe.recipeInstructions : [];
@@ -1698,6 +1711,14 @@ export function mapOfficialCookidooToInput(recipe: any): CookidooRecipeInput {
 
     // 1. Build mode annotations first
     const modePatterns = [
+      {
+        pattern: /\bTurbo\s*\/\s*(\d+(?:[.,]\d+)?)\s*Sek\.?(?:\s*\/\s*(\d+)\s*(?:x|Mal))?/gi,
+        parser: (_match: string, p1: string, p2: string) => turboModeFromText(p1, p2)
+      },
+      {
+        pattern: /\b(?:(\d+)\s*(?:x|Mal)\s*)?(\d+(?:[.,]\d+)?)\s*Sek\.?\s*\/\s*Turbo\b/gi,
+        parser: (_match: string, p1: string, p2: string) => turboModeFromText(p2, p1)
+      },
       {
         pattern: /\b(\d+)\s*(?:Sek\.|Min\.)\/(?:\d+°C\/|Varoma\/)?(?:Linkslauf\/|Rechtslauf\/)?Stufe\s*(\d+(?:\.\d+)?)/gi,
         parser: (match: string, p1: string, p2: string) => {

@@ -112,6 +112,35 @@ describe("CLI Recipe Formatting & Adapters Mapping", () => {
       expect(matchedIngredients).toContain("Hefe");
       expect(matchedIngredients).toContain("Zucker");
     });
+
+    it("preserves explicit Turbo instructions instead of treating them as blend", () => {
+      const officialPayload = {
+        "@type": "Recipe",
+        name: "Turbo Test",
+        recipeYield: "1 Portion",
+        recipeIngredient: ["50 g Parmesan"],
+        recipeInstructions: [
+          "Parmesan in den Mixtopf geben und Turbo/1 Sek. zerkleinern.",
+          "Mit dem Spatel nach unten schieben und 3 x 0,5 Sek./Turbo zerkleinern.",
+          "Parmesan in den Mixtopf geben und 10 Sek./Stufe 10 mahlen."
+        ]
+      };
+
+      const mapped = mapOfficialCookidooToInput(officialPayload);
+
+      expect(mapped.steps[0].modeAnnotations![0]).toEqual({
+        matchedSubstring: "Turbo/1 Sek.",
+        mode: { type: "turbo", pulseDuration: 1 }
+      });
+      expect(mapped.steps[1].modeAnnotations![0]).toEqual({
+        matchedSubstring: "3 x 0,5 Sek./Turbo",
+        mode: { type: "turbo", pulseDuration: 0.5, pulseCount: 3 }
+      });
+      expect(mapped.steps[2].modeAnnotations![0]).toEqual({
+        matchedSubstring: "10 Sek./Stufe 10",
+        mode: { type: "blend", time: 10, speed: "10" }
+      });
+    });
   });
 
   describe("mapCustomCookidooToInput", () => {
