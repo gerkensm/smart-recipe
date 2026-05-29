@@ -372,7 +372,8 @@ describe("ThermomixAdapter", () => {
           ingredientCount: undefined,
           stepCount: undefined,
           hasImage: false,
-          hasHints: false
+          hasHints: false,
+          recipeUrl: "https://cookidoo.de/created-recipes/de-DE/01K2CTJ9Y1BABRG5MXK44CFZS4"
         }
       ]);
     });

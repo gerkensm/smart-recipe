@@ -269,6 +269,9 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
           stepCount: recipe.recipeContent?.instructions?.length ?? recipe.recipeContent?.recipeInstructions?.length,
           hasImage: Boolean(recipe.recipeContent?.image || recipe.recipeContent?.descriptiveAssets?.length),
           hasHints: Boolean(recipe.recipeContent?.hints),
+          recipeUrl: recipe.recipeId
+            ? `https://${client.domain}/created-recipes/${client.language}/${encodeURIComponent(recipe.recipeId)}`
+            : undefined,
         })),
         total: allRecipes.length,
         totalPage: size > 0 ? Math.max(1, Math.ceil(allRecipes.length / size)) : 1,

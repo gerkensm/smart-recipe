@@ -2,17 +2,19 @@ import OpenAI from "openai";
 import type { RetrievedRecipePage } from "../retriever/types.js";
 import type { RecipeGenerationOptions, RecipeGenerator } from "./types.js";
 import { makeOpenAIStrictSchema } from "./schema-format.js";
-import { MonsieurCuisineAdapter } from "../devices/mc/adapter.js";
+
+type GenerationDefaults = Required<Omit<RecipeGenerationOptions, "adapter">> & Pick<RecipeGenerationOptions, "adapter">;
 
 export interface OpenAIRecipeGeneratorOptions extends RecipeGenerationOptions {
   client?: OpenAI;
+  adapter: NonNullable<RecipeGenerationOptions["adapter"]>;
 }
 
 export class OpenAIRecipeGenerator implements RecipeGenerator {
   private readonly client: OpenAI;
-  private readonly defaults: Required<RecipeGenerationOptions>;
+  private readonly defaults: GenerationDefaults;
 
-  constructor(options: OpenAIRecipeGeneratorOptions = {}) {
+  constructor(options: OpenAIRecipeGeneratorOptions) {
     this.client = options.client ?? new OpenAI();
     this.defaults = {
       model: options.model ?? process.env.OPENAI_MODEL ?? "gpt-5.5",
@@ -20,7 +22,7 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
       locale: options.locale ?? "de-DE",
       maxCorrectionAttempts: options.maxCorrectionAttempts ?? 3,
       excludeModes: options.excludeModes ?? [],
-      adapter: options.adapter ?? new MonsieurCuisineAdapter()
+      adapter: options.adapter
     };
   }
 
@@ -28,7 +30,11 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
     const cleanOptions = Object.fromEntries(
       Object.entries(options).filter(([_, v]) => v !== undefined)
     );
-    const finalOptions = { ...this.defaults, ...cleanOptions } as Required<RecipeGenerationOptions>;
+    const mergedOptions = { ...this.defaults, ...cleanOptions } as GenerationDefaults;
+    if (!mergedOptions.adapter) {
+      throw new Error("OpenAIRecipeGenerator requires a device adapter.");
+    }
+    const finalOptions = mergedOptions as Required<RecipeGenerationOptions>;
     let feedback: { errors: string[]; previous: unknown } | undefined;
 
     const adapter = finalOptions.adapter;
@@ -151,4 +157,3 @@ function validateExcludedModes(output: unknown, excludeModes: string[] = []): st
 
   return errors;
 }
-

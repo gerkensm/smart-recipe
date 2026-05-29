@@ -4,91 +4,65 @@ import os from "node:os";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { Command, Help } from "commander";
-import {
-  confirm as inquirerConfirm,
-  input as inquirerInput,
-  password as inquirerPassword,
-  select as inquirerSelect
-} from "@inquirer/prompts";
 import fs from "node:fs";
-import tty from "node:tty";
-
-let ttyStream: tty.ReadStream | undefined;
-
-function getInteractiveInput() {
-  if (process.platform === "win32") {
-    return process.stdin;
-  }
-  // If stdin has ended (e.g. after pasting and Ctrl-D), we must read from /dev/tty
-  if ((process.stdin as any).readableEnded || !(process.stdin as any).readable) {
-    if (!ttyStream) {
-      try {
-        const fd = fs.openSync("/dev/tty", "r");
-        ttyStream = new tty.ReadStream(fd);
-      } catch (err) {
-        return process.stdin;
-      }
-    }
-    return ttyStream;
-  }
-  return process.stdin;
-}
-
-function confirm(options: Parameters<typeof inquirerConfirm>[0]) {
-  return inquirerConfirm(options, { input: getInteractiveInput() });
-}
-
-function input(options: Parameters<typeof inquirerInput>[0]) {
-  return inquirerInput(options, { input: getInteractiveInput() });
-}
-
-function password(options: Parameters<typeof inquirerPassword>[0]) {
-  return inquirerPassword(options, { input: getInteractiveInput() });
-}
-
-function select<T>(options: Parameters<typeof inquirerSelect<T>>[0]) {
-  return inquirerSelect<T>(options, { input: getInteractiveInput() });
-}
-import { loadDotEnv, upsertDotEnvValue, getTargetDevice, getTmVersion, getTmLocale, getTmCookie, mcHasFoodProcessor } from "../config/env.js";
+import { loadDotEnv, upsertDotEnvValue, getTmVersion, getTmLocale, mcHasFoodProcessor } from "../config/env.js";
 import { categoryPromptText, plannedLocales, supportedLocales } from "../catalogs/index.js";
-import type { SupportedLocale } from "../catalogs/types.js";
-import { buildRecipeInstructions } from "../llm/prompts.js";
-import { BrowserCookieAuthProvider, CookieAuthProvider } from "../mc/auth.js";
-import { browserLoginForMonsieurCuisine } from "../mc/browser-login.js";
-import { AuthFlowError, MonsieurCuisineApiError } from "../mc/errors.js";
-import { MonsieurCuisineSmartClient } from "../mc/client.js";
+import { MonsieurCuisineApiError } from "../mc/errors.js";
 import { CookidooError } from "../devices/tm/errors.js";
-import { getLocalization } from "../devices/tm/client.js";
-import type { CookidooRecipeInput } from "../devices/tm/schema.js";
 import { getDeviceAdapter } from "../devices/index.js";
 import {
   generateSmartRecipe,
-  importRecipeFromUrl,
   uploadSmartRecipe,
   type GenerateSmartRecipeResult
 } from "../pipeline/import-url.js";
-import { RecipeInputSchema, formatRecipeTerminal } from "../recipes/index.js";
-import { validateRecipeInput } from "../recipes/validation.js";
 import { retrieveRecipePage } from "../retriever/retriever.js";
 import type { RetrievedRecipePage } from "../retriever/types.js";
 import { createLogger } from "../logging/logger.js";
 import type { ReasoningEffort } from "../llm/types.js";
-import { OpenAIRecipeImageGenerator } from "../llm/openai-image-generator.js";
-import { NullImageProvider } from "../pipeline/images.js";
-import {
-  mapOfficialCookidooToInput,
-  mapCustomCookidooToInput,
-} from "./cookidoo-mappers.js";
 export {
   cleanHtmlText,
   parseIsoDuration,
   mapOfficialCookidooToInput,
   mapCustomCookidooToInput,
 } from "./cookidoo-mappers.js";
-import { formatDoctorForTerminal, formatRecipesForTerminal } from "./formatters.js";
+export { mapMonsieurCuisineToInput } from "./monsieur-cuisine-mappers.js";
+import { mapRecipeToInput, formatRecipeForTerminal } from "./recipe-rendering.js";
+export { formatRecipeForTerminal } from "./recipe-rendering.js";
+import {
+  formatDoctorForTerminal,
+  formatRecipesForTerminal,
+  formatUserForTerminal
+} from "./formatters.js";
+export { formatDraftsForTerminal, formatUserForTerminal } from "./formatters.js";
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import { detectRecipeSource, fetchRecipeSourceAsPage, fetchRecipeSourceWithRaw, type RecipeSource } from "../sources/index.js";
+import { confirm } from "./prompts.js";
+import { resolveAuthInteractively } from "./auth-workflow.js";
+import {
+  decideUpload,
+  ensureOpenAIKey,
+  explicitImageMode,
+  resolveExcludedModes,
+  resolveImageProvider,
+  resolveTargetDeviceSettings
+} from "./import-workflow.js";
+import {
+  activeCookieForDevice,
+  cookieKeyForDevice,
+  getOrPromptDevice,
+  getOrPromptTargetLocale,
+  sourceCookiesFromOptions,
+  sourceDeviceForType,
+  sourceLocaleFromOptions
+} from "./settings.js";
+import {
+  formatCliError,
+  printableImportResult,
+  printOutput,
+  printSuggestedCommand,
+  summarizeImportResult
+} from "./output.js";
 
 function detectDeviceFromRecipe(json: any): "mc" | "tm" {
   if (json && (typeof json.servingSize === "number" || Array.isArray(json.steps))) {
@@ -394,196 +368,20 @@ async function runImport(
     process.env.MC_HAS_FOOD_PROCESSOR = options.mcFoodProcessor.toLowerCase();
   }
 
-  // ── Step 0: Determine target device ───────────────────────────────────────
-  let targetDevice: "mc" | "tm";
-  if (options.target && !options.device) {
-    options.device = options.target;
-  }
-  if (!process.env.TARGET_DEVICE && !options.device) {
-    if (isInteractive) {
-      wasPrompted = true;
-      console.log();
-      targetDevice = await select({
-        message: "Which smart cooker do you want to target?",
-        choices: [
-          { name: "Monsieur Cuisine (MC)", value: "mc" as const },
-          { name: "Thermomix (TM)", value: "tm" as const }
-        ]
-      });
-
-      let tmVersion: "tm7" | "tm6" | "tm5" | undefined;
-      if (targetDevice === "tm") {
-        tmVersion = await select({
-          message: "Which Thermomix model do you own?",
-          choices: [
-            { name: "TM7", value: "tm7" as const },
-            { name: "TM6", value: "tm6" as const },
-            { name: "TM5", value: "tm5" as const }
-          ]
-        });
-      }
-
-      let mcHasFoodProcessor: boolean | undefined;
-      if (targetDevice === "mc" && typeof process.env.MC_HAS_FOOD_PROCESSOR === "undefined") {
-        mcHasFoodProcessor = await confirm({
-          message: "Do you own the optional Food Processor (cutter) attachment for Monsieur Cuisine?",
-          default: false
-        });
-      }
-
-      const saveSettings = process.env.SAVE_SETTINGS !== "false" && await confirm({
-        message: "Save these cooker settings to ~/.smart-recipe?",
-        default: true
-      });
-      if (saveSettings) {
-        upsertDotEnvValue(GLOBAL_ENV_PATH, "TARGET_DEVICE", targetDevice);
-        if (tmVersion) {
-          upsertDotEnvValue(GLOBAL_ENV_PATH, "TM_VERSION", tmVersion);
-        }
-        if (mcHasFoodProcessor !== undefined) {
-          upsertDotEnvValue(GLOBAL_ENV_PATH, "MC_HAS_FOOD_PROCESSOR", String(mcHasFoodProcessor));
-        }
-        console.log(`✓ Saved device settings to ${GLOBAL_ENV_PATH}\n`);
-      } else {
-        process.env.SAVE_SETTINGS = "false";
-      }
-      if (tmVersion) {
-        process.env.TM_VERSION = tmVersion;
-      }
-      if (mcHasFoodProcessor !== undefined) {
-        process.env.MC_HAS_FOOD_PROCESSOR = String(mcHasFoodProcessor);
-      }
-      process.env.TARGET_DEVICE = targetDevice;
-    } else {
-      targetDevice = "mc"; // default
-    }
-  } else {
-    const val = (options.device || process.env.TARGET_DEVICE || "mc").toLowerCase();
-    targetDevice = (val === "tm" || val === "thermomix") ? "tm" : "mc";
-  }
-
-  if (options.tmVersion) {
-    process.env.TM_VERSION = options.tmVersion.toLowerCase();
-  }
-
-  if (targetDevice === "tm" && !process.env.TM_VERSION) {
-    if (isInteractive) {
-      wasPrompted = true;
-      const tmVersion = await select({
-        message: "Which Thermomix model do you own?",
-        choices: [
-          { name: "TM7", value: "tm7" as const },
-          { name: "TM6", value: "tm6" as const },
-          { name: "TM5", value: "tm5" as const }
-        ]
-      });
-      const saveSettings = process.env.SAVE_SETTINGS !== "false" && await confirm({
-        message: "Save this Thermomix model to ~/.smart-recipe?",
-        default: true
-      });
-      if (saveSettings) {
-        upsertDotEnvValue(GLOBAL_ENV_PATH, "TM_VERSION", tmVersion);
-        console.log(`✓ Saved TM_VERSION to ${GLOBAL_ENV_PATH}\n`);
-      } else {
-        process.env.SAVE_SETTINGS = "false";
-      }
-      process.env.TM_VERSION = tmVersion;
-    } else {
-      process.env.TM_VERSION = "tm6";
-    }
-  }
-
-  if (targetDevice === "mc" && typeof process.env.MC_HAS_FOOD_PROCESSOR === "undefined") {
-    if (isInteractive) {
-      wasPrompted = true;
-      const mcHasFoodProcessor = await confirm({
-        message: "Do you own the optional Food Processor (cutter) attachment for Monsieur Cuisine?",
-        default: false
-      });
-      const saveSettings = process.env.SAVE_SETTINGS !== "false" && await confirm({
-        message: "Save this setting to ~/.smart-recipe?",
-        default: true
-      });
-      if (saveSettings) {
-        upsertDotEnvValue(GLOBAL_ENV_PATH, "MC_HAS_FOOD_PROCESSOR", String(mcHasFoodProcessor));
-        console.log(`✓ Saved MC_HAS_FOOD_PROCESSOR to ${GLOBAL_ENV_PATH}\n`);
-      } else {
-        process.env.SAVE_SETTINGS = "false";
-      }
-      process.env.MC_HAS_FOOD_PROCESSOR = String(mcHasFoodProcessor);
-    } else {
-      process.env.MC_HAS_FOOD_PROCESSOR = "false"; // default to false if non-interactive (default off)
-    }
-  }
-
+  const targetDeviceResult = await resolveTargetDeviceSettings(options, isInteractive, GLOBAL_ENV_PATH);
+  const targetDevice = targetDeviceResult.device;
+  wasPrompted = wasPrompted || targetDeviceResult.prompted;
   const adapter = getDeviceAdapter(targetDevice);
-  const targetLocaleResult = await getOrPromptTargetLocale(targetDevice, options, isInteractive);
+  const targetLocaleResult = await getOrPromptTargetLocale(targetDevice, options, isInteractive, GLOBAL_ENV_PATH);
   const targetLocale = targetLocaleResult.locale;
   wasPrompted = wasPrompted || targetLocaleResult.prompted;
 
-  // ── Step 1: Ensure we have an OpenAI API key ──────────────────────────────
-  if (!process.env.OPENAI_API_KEY) {
-    if (!isInteractive) {
-      throw new Error("OPENAI_API_KEY is not set. Provide it via the environment or run interactively.");
-    }
-
-    console.log();
-    console.log("  \x1b[1m\x1b[33m⚠  No OpenAI API key found.\x1b[0m");
-    console.log("  You can get one at \x1b[36mhttps://platform.openai.com/api-keys\x1b[0m");
-    console.log();
-
-    const apiKey = await password({
-      message: "  Paste your OpenAI API key",
-      validate: (v) => {
-        if (!v.trim()) return "API key cannot be empty.";
-        if (!/^(sk-|proj-)/.test(v.trim())) return "This doesn't look like a valid OpenAI key (expected sk-… or proj-…).";
-        return true;
-      }
-    });
-
-    process.env.OPENAI_API_KEY = apiKey.trim();
-
-    const saveKey = process.env.SAVE_SETTINGS !== "false" && await confirm({
-      message: "  Save this key to ~/.smart-recipe?",
-      default: true
-    });
-    if (saveKey) {
-      upsertDotEnvValue(GLOBAL_ENV_PATH, "OPENAI_API_KEY", apiKey.trim());
-      console.log(`  \x1b[32m✓ Saved to ${GLOBAL_ENV_PATH}\x1b[0m\n`);
-    } else {
-      process.env.SAVE_SETTINGS = "false";
-    }
-  }
+  await ensureOpenAIKey(isInteractive, GLOBAL_ENV_PATH);
 
   // ── Step 2: Generate the recipe ───────────────────────────────────────────
   // Image provider is resolved later (Step 4.5), after the user confirms upload.
-  // Pre-compute the flag values here so the logic below is cleaner.
-  const imageExplicitMode: "generate" | "generate-with-sources" | "skip" | "none" | null =
-    options.noImage ? "none"
-    : options.useSourceImage ? "skip"
-    : (options.recreateImageWithSourceImages || options.imageReferenceSource) ? "generate-with-sources"
-    : options.recreateImage ? "generate"
-    : null; // null = ask interactively
-
-  let imageMode: "generate" | "generate-with-sources" | "skip" | "none" | null = imageExplicitMode;
-
-  const excludeModes: string[] = options.excludeModes
-    ? options.excludeModes.split(",").map((m: string) => m.trim())
-    : [];
-
-  if (targetDevice === "mc" && !mcHasFoodProcessor()) {
-    if (!excludeModes.includes("foodProcessor")) {
-      excludeModes.push("foodProcessor");
-    }
-  }
-
-  // cook mode (Garen) is not available for My Creations on Cookidoo — exclude by default.
-  // Users can opt in with --extend-tm-modes if they want to experiment.
-  if (targetDevice === "tm" && !(options.extendTmModes || options.experimentalTmModes)) {
-    if (!excludeModes.includes("cook")) {
-      excludeModes.push("cook");
-    }
-  }
+  let imageMode = explicitImageMode(options);
+  const excludeModes = resolveExcludedModes(targetDevice, options);
 
   const generated: GenerateSmartRecipeResult = await generateSmartRecipe({
     page,
@@ -600,22 +398,9 @@ async function runImport(
     console.log(adapter.formatInputForTerminal(generated.recipeInput));
   }
 
-  // ── Step 4: Decide whether to upload ─────────────────────────────────────
-  let shouldUpload: boolean;
-  if (options.dryRun) {
-    shouldUpload = false;
-  } else if (options.alwaysUpload) {
-    shouldUpload = true;
-  } else if (isInteractive) {
-    wasPrompted = true;
-    console.log();
-    shouldUpload = await confirm({
-      message: `  Upload this recipe to ${adapter.deviceName}?`,
-      default: false
-    });
-  } else {
-    shouldUpload = false;
-  }
+  const uploadDecision = await decideUpload(options, isInteractive, adapter);
+  const shouldUpload = uploadDecision.shouldUpload;
+  wasPrompted = wasPrompted || uploadDecision.prompted;
 
   if (!shouldUpload) {
     if (!isJsonMode) {
@@ -630,61 +415,13 @@ async function runImport(
     return;
   }
 
-  // ── Step 4.5: Resolve image provider ─────────────────────────────────────
-  if (imageMode === null && isInteractive) {
-    wasPrompted = true;
-    const sourceImageCount = generated.page.images?.filter((img: any) => img.score >= 0.5).length ?? 0;
-    const sourceHint = sourceImageCount > 0
-      ? `  \x1b[2m(${sourceImageCount} potential recipe image${sourceImageCount !== 1 ? "s" : ""} found on the source page)\x1b[0m`
-      : `  \x1b[2m(no suitable source images found on the page)\x1b[0m`;
-    console.log(sourceHint);
-    console.log();
-    const imageChoice = await select<"skip" | "none" | "generate" | "generate-with-sources">({
-      message: "  Recipe image?",
-      choices: [
-        {
-          name: "Use the best image from the source website (if available)",
-          value: "skip" as const,
-        },
-        {
-          name: "No image – upload without any image",
-          value: "none" as const,
-        },
-        {
-          name: "Generate a fresh AI image (uses image generation credits)",
-          value: "generate" as const,
-        },
-        ...(
-          sourceImageCount > 0
-            ? [{
-                name: `Generate using website photos as visual reference (${sourceImageCount} image${sourceImageCount !== 1 ? "s" : ""})`,
-                value: "generate-with-sources" as const,
-              }]
-            : []
-        ),
-      ],
-      default: "skip",
-    });
-    imageMode = imageChoice;
-  } else if (imageMode === null) {
-    imageMode = "skip"; // non-interactive default: use source image
-  }
-
-  const imageProvider =
-    imageMode === "none"
-      ? new NullImageProvider()
-      : imageMode === "skip" || imageMode === null
-        ? undefined
-        : new OpenAIRecipeImageGenerator({
-            model: options.imageModel,
-            size: options.imageSize,
-            quality: options.imageQuality,
-            includeSourceImages: imageMode === "generate-with-sources",
-            logger,
-          });
+  const imageResult = await resolveImageProvider(imageMode, generated, isInteractive, options, logger);
+  imageMode = imageResult.imageMode;
+  wasPrompted = wasPrompted || imageResult.prompted;
+  const imageProvider = imageResult.imageProvider;
 
   // ── Step 5: Resolve authentication ───────────────────────────────────────
-  let authProvider = await resolveAuthInteractively(options, isInteractive, adapter);
+  let authProvider = await resolveAuthInteractively(options, isInteractive, adapter, GLOBAL_ENV_PATH);
 
   // ── Step 6: Upload ────────────────────────────────────────────────────────
   let uploadResult;
@@ -722,7 +459,7 @@ async function runImport(
       options.cookie = undefined;
 
       // Ask for credentials / cookie again
-      authProvider = await resolveAuthInteractively(options, isInteractive, adapter);
+      authProvider = await resolveAuthInteractively(options, isInteractive, adapter, GLOBAL_ENV_PATH);
 
       // Attempt upload again with the new session
       const session = await authProvider.getSession();
@@ -783,181 +520,6 @@ async function runImport(
   printSuggestedCommand(cmdArgs, options, programOpts, targetDevice, imageMode, shouldUpload, isJsonMode, wasPrompted);
 }
 
-/**
- * Resolves a cooker auth provider interactively.
- */
-async function resolveAuthInteractively(
-  options: { cookie?: string },
-  isInteractive: boolean,
-  adapter: any
-): Promise<any> {
-  const cookieKey = adapter.id === "tm" ? "TM_COOKIE" : "MC_COOKIE";
-  const currentCookie = options.cookie ?? process.env[cookieKey];
-
-  if (currentCookie) {
-    if (adapter.id === "tm") {
-      return {
-        async getSession() {
-          return { cookie: currentCookie };
-        }
-      };
-    } else {
-      return new CookieAuthProvider(currentCookie);
-    }
-  }
-
-  if (!isInteractive) {
-    return makeSilentBrowserAuthProvider(adapter);
-  }
-
-  console.log();
-  console.log(`  \x1b[1m\x1b[33m⚠  No ${adapter.deviceName} session found.\x1b[0m`);
-  console.log();
-
-  const method = await select({
-    message: "  How would you like to authenticate?",
-    choices: [
-      {
-        name: `Browser login  (opens ${adapter.deviceName} login window)`,
-        value: "browser" as const,
-        description: adapter.id === "tm"
-          ? "A small Chromium window opens so you can\nsign in with your Cookidoo account."
-          : "A small Chromium window opens so you can\nsign in with your Lidl Plus account."
-      },
-      {
-        name: "Paste cookie   (enter Cookie header manually)",
-        value: "cookie" as const,
-        description: adapter.id === "tm"
-          ? "Open cookidoo.de (or your local Cookidoo) in your browser,\ncopy the Cookie header from DevTools, and\npaste it here."
-          : "Open monsieur-cuisine.com in your browser,\ncopy the Cookie header from DevTools, and\npaste it here."
-      }
-    ]
-  });
-
-  if (method === "browser") {
-    try {
-      return await attemptBrowserLogin(isInteractive, adapter);
-    } catch (err) {
-      console.log();
-      console.log(`  \x1b[31m✗ Browser login failed.\x1b[0m Falling back to manual cookie.`);
-      return await promptForManualCookie(adapter);
-    }
-  }
-
-  return await promptForManualCookie(adapter);
-}
-
-/** Attempts a browser login, saves the cookie if the user agrees, and returns a CookieAuthProvider or custom session object. */
-async function attemptBrowserLogin(isInteractive: boolean, adapter: any): Promise<any> {
-  const isTm = adapter.id === "tm";
-  const localeKey = isTm ? "TM_LOCALE" : "MC_LOCALE";
-  const cookieKey = isTm ? "TM_COOKIE" : "MC_COOKIE";
-  const loginKey = isTm ? "TM_LOGIN" : "MC_LOGIN";
-  const pwKey = isTm ? "TM_PW" : "MC_PW";
-
-  const locale = (process.env[localeKey] ?? "de-DE") as any;
-  console.log();
-  const result = await adapter.browserLogin({
-    locale,
-    credentials: process.env[loginKey] ? { email: process.env[loginKey], password: process.env[pwKey] } : undefined,
-    onStatus: (message: string) => console.error(`  \x1b[2m${message}\x1b[0m`)
-  });
-
-  if (isInteractive) {
-    console.log();
-    const saveCookie = process.env.SAVE_SETTINGS !== "false" && await confirm({
-      message: `  Save this session cookie to ~/.smart-recipe?`,
-      default: true
-    });
-    if (saveCookie) {
-      upsertDotEnvValue(GLOBAL_ENV_PATH, cookieKey, result.cookie);
-      console.log(`  \x1b[32m✓ Saved ${cookieKey} to ${GLOBAL_ENV_PATH}\x1b[0m\n`);
-    }
-  }
-
-  if (isTm) {
-    return {
-      async getSession() {
-        return { cookie: result.cookie };
-      }
-    };
-  } else {
-    return new CookieAuthProvider(result.cookie);
-  }
-}
-
-/**
- * Shows step-by-step instructions for obtaining a cookie manually,
- * then prompts the user to paste it in and offers to save it.
- */
-async function promptForManualCookie(adapter: any): Promise<any> {
-  const isTm = adapter.id === "tm";
-  const cookieKey = isTm ? "TM_COOKIE" : "MC_COOKIE";
-
-  console.log();
-  console.log("  \x1b[1mHow to get your Cookie header:\x1b[0m");
-  if (isTm) {
-    console.log("  1. Open \x1b[36mhttps://cookidoo.de\x1b[0m (or your local Cookidoo site) and log in.");
-    console.log("  2. Open DevTools  \x1b[2m(F12 or Cmd+Option+I)\x1b[0m → Network tab.");
-    console.log("  3. Reload the page, click any request to cookidoo.*.");
-    console.log("  4. In the Request Headers, find \x1b[1mCookie:\x1b[0m and copy the full value.");
-  } else {
-    console.log("  1. Open \x1b[36mhttps://www.monsieur-cuisine.com\x1b[0m and log in with your Lidl Plus account.");
-    console.log("  2. Open DevTools  \x1b[2m(F12 or Cmd+Option+I)\x1b[0m → Network tab.");
-    console.log("  3. Reload the page, click any request to monsieur-cuisine.com.");
-    console.log("  4. In the Request Headers, find \x1b[1mCookie:\x1b[0m and copy the full value.");
-  }
-  console.log();
-
-  const cookie = await input({
-    message: "  Paste your Cookie header",
-    validate: (v) => (v.trim() ? true : "Cookie cannot be empty.")
-  });
-
-  const saveCookie = process.env.SAVE_SETTINGS !== "false" && await confirm({
-    message: "  Save this cookie to ~/.smart-recipe?",
-    default: true
-  });
-  if (saveCookie) {
-    upsertDotEnvValue(GLOBAL_ENV_PATH, cookieKey, cookie.trim());
-    console.log(`  \x1b[32m✓ Saved ${cookieKey} to ${GLOBAL_ENV_PATH}\x1b[0m\n`);
-  }
-
-  if (isTm) {
-    return {
-      async getSession() {
-        return { cookie: cookie.trim() };
-      }
-    };
-  } else {
-    return new CookieAuthProvider(cookie.trim());
-  }
-}
-
-/** Silent browser-login auth provider used in non-interactive mode. */
-function makeSilentBrowserAuthProvider(adapter: any): any {
-  const isTm = adapter.id === "tm";
-  const localeKey = isTm ? "TM_LOCALE" : "MC_LOCALE";
-  const cookieKey = isTm ? "TM_COOKIE" : "MC_COOKIE";
-  const loginKey = isTm ? "TM_LOGIN" : "MC_LOGIN";
-  const pwKey = isTm ? "TM_PW" : "MC_PW";
-
-  return {
-    async getSession() {
-      const locale = (process.env[localeKey] ?? "de-DE") as any;
-      console.error(`No ${adapter.deviceName} cookie found. Opening login window...`);
-      const result = await adapter.browserLogin({
-        locale,
-        credentials: process.env[loginKey] ? { email: process.env[loginKey], password: process.env[pwKey] } : undefined,
-        onStatus: (message: string) => console.error(message)
-      });
-      upsertDotEnvValue(GLOBAL_ENV_PATH, cookieKey, result.cookie);
-      console.error(`Saved ${cookieKey} to ${GLOBAL_ENV_PATH}.`);
-      return { cookie: result.cookie, source: result.source };
-    }
-  };
-}
-
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
@@ -966,160 +528,12 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-async function getOrPromptDevice(options: any): Promise<"mc" | "tm"> {
-  const isJsonMode = Boolean(program.opts().json);
-  const isInteractive = !isJsonMode && process.stdout.isTTY && process.stdin.isTTY;
-
-  let device = options.device || process.env.TARGET_DEVICE;
-  if (!device) {
-    if (isInteractive) {
-      console.log();
-      device = await select({
-        message: "Which smart cooker do you want to target?",
-        choices: [
-          { name: "Monsieur Cuisine (MC)", value: "mc" as const },
-          { name: "Thermomix (TM)", value: "tm" as const }
-        ]
-      });
-
-      const saveSettings = process.env.SAVE_SETTINGS !== "false" && await confirm({
-        message: "Save this cooker choice to ~/.smart-recipe?",
-        default: true
-      });
-      if (saveSettings) {
-        upsertDotEnvValue(GLOBAL_ENV_PATH, "TARGET_DEVICE", device);
-        console.log(`✓ Saved TARGET_DEVICE to ${GLOBAL_ENV_PATH}\n`);
-      } else {
-        process.env.SAVE_SETTINGS = "false";
-      }
-    } else {
-      device = "mc"; // default fallback for non-interactive
-    }
-  }
-  const val = device.toLowerCase();
-  return (val === "tm" || val === "thermomix") ? "tm" : "mc";
+function isInteractiveCli(): boolean {
+  return !Boolean(program.optsWithGlobals().json) && process.stdout.isTTY && process.stdin.isTTY;
 }
 
-function cookieKeyForDevice(device: "mc" | "tm"): "MC_COOKIE" | "TM_COOKIE" {
-  return device === "tm" ? "TM_COOKIE" : "MC_COOKIE";
-}
-
-function activeCookieForDevice(device: "mc" | "tm", options: any): string | undefined {
-  if (options.cookie) return options.cookie;
-  return device === "tm" ? getTmCookie() : process.env.MC_COOKIE;
-}
-
-function sourceCookiesFromOptions(options: any, detectedSource?: RecipeSource): { mc?: string; tm?: string } {
-  const sourceType = options.source ?? detectedSource?.type;
-  return {
-    mc: options.mcSourceCookie ?? (sourceType === "mc" ? options.sourceCookie : undefined) ?? process.env.MC_COOKIE,
-    tm: options.tmSourceCookie ?? (
-      sourceType === "tm" ||
-      sourceType === "cookidoo" ||
-      sourceType === "cookidoo-official" ||
-      sourceType === "cookidoo-created"
-        ? options.sourceCookie
-        : undefined
-    ) ?? getTmCookie(),
-  };
-}
-
-function sourceLocaleFromOptions(options: any, detectedSource: RecipeSource): string {
-  if (options.sourceLocale) return normalizeSupportedLocale(options.sourceLocale) ?? options.sourceLocale;
-  if ("locale" in detectedSource && detectedSource.locale) return detectedSource.locale;
-  const sourceDevice = sourceDeviceForType(detectedSource.type);
-  if (sourceDevice === "tm") return normalizeSupportedLocale(getTmLocale("de-DE")) ?? getTmLocale("de-DE");
-  if (sourceDevice === "mc") return normalizeSupportedLocale(process.env.MC_LOCALE) ?? process.env.MC_LOCALE ?? "de-DE";
-  return normalizeSupportedLocale(options.locale ?? options.language) ?? options.locale ?? options.language ?? "de-DE";
-}
-
-function sourceDeviceForType(sourceType: RecipeSource["type"]): "mc" | "tm" | null {
-  if (sourceType === "mc") return "mc";
-  if (sourceType === "cookidoo-official" || sourceType === "cookidoo-created") return "tm";
-  return null;
-}
-
-const localeChoiceLabels: Record<SupportedLocale, string> = {
-  "de-DE": "German (Germany)",
-  "en-US": "English (US)",
-  "fr-FR": "French (France)",
-  "it-IT": "Italian (Italy)",
-  "pl-PL": "Polish (Poland)",
-  "cs-CZ": "Czech (Czechia)",
-};
-
-const localeAliases: Record<string, SupportedLocale> = {
-  cs: "cs-CZ",
-  "cs-cz": "cs-CZ",
-  cz: "cs-CZ",
-  de: "de-DE",
-  "de-de": "de-DE",
-  en: "en-US",
-  "en-us": "en-US",
-  fr: "fr-FR",
-  "fr-fr": "fr-FR",
-  it: "it-IT",
-  "it-it": "it-IT",
-  pl: "pl-PL",
-  "pl-pl": "pl-PL",
-};
-
-function localeEnvKeyForDevice(device: "mc" | "tm"): "MC_LOCALE" | "TM_LOCALE" {
-  return device === "tm" ? "TM_LOCALE" : "MC_LOCALE";
-}
-
-function normalizeSupportedLocale(value: unknown): SupportedLocale | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim();
-  const alias = localeAliases[normalized.toLowerCase()];
-  if (alias) return alias;
-  return (supportedLocales as readonly string[]).includes(normalized)
-    ? normalized as SupportedLocale
-    : undefined;
-}
-
-async function getOrPromptTargetLocale(
-  targetDevice: "mc" | "tm",
-  options: any,
-  isInteractive: boolean
-): Promise<{ locale: SupportedLocale; prompted: boolean }> {
-  const localeKey = localeEnvKeyForDevice(targetDevice);
-  const rawLocale = options.locale ?? options.language ?? process.env[localeKey];
-  const locale = normalizeSupportedLocale(rawLocale);
-  if (rawLocale && !locale) {
-    throw new Error(`Unsupported locale ${rawLocale}. Supported locales: ${supportedLocales.join(", ")}`);
-  }
-  if (locale) {
-    process.env[localeKey] = locale;
-    return { locale, prompted: false };
-  }
-
-  if (!isInteractive) {
-    process.env[localeKey] = "de-DE";
-    return { locale: "de-DE", prompted: false };
-  }
-
-  const selectedLocale = await select<SupportedLocale>({
-    message: `Which language/locale should the generated ${targetDevice === "tm" ? "Thermomix" : "Monsieur Cuisine"} recipe use?`,
-    choices: supportedLocales.map((value) => ({
-      name: `${localeChoiceLabels[value]} (${value})`,
-      value,
-    })),
-    default: "de-DE",
-  });
-
-  const saveSettings = process.env.SAVE_SETTINGS !== "false" && await confirm({
-    message: `Save this ${targetDevice === "tm" ? "Thermomix" : "Monsieur Cuisine"} locale to ~/.smart-recipe?`,
-    default: true,
-  });
-  if (saveSettings) {
-    upsertDotEnvValue(GLOBAL_ENV_PATH, localeKey, selectedLocale);
-    console.log(`✓ Saved ${localeKey} to ${GLOBAL_ENV_PATH}\n`);
-  } else {
-    process.env.SAVE_SETTINGS = "false";
-  }
-  process.env[localeKey] = selectedLocale;
-  return { locale: selectedLocale, prompted: true };
+async function resolveCommandDevice(options: any): Promise<"mc" | "tm"> {
+  return await getOrPromptDevice(options, isInteractiveCli(), GLOBAL_ENV_PATH);
 }
 
 function isSourceAuthError(source: RecipeSource, error: any): boolean {
@@ -1209,7 +623,7 @@ async function buildDoctorReport(device: "mc" | "tm", options: any) {
 }
 
 async function listRecipesCommand(options: any) {
-  const device = await getOrPromptDevice(options);
+  const device = await resolveCommandDevice(options);
   const adapter = getDeviceAdapter(device);
   const activeCookie = requireCookieForDevice(device, options);
   const size = Number(options.limit ?? options.size ?? 20);
@@ -1219,25 +633,9 @@ async function listRecipesCommand(options: any) {
   let total = 0;
   let totalPage = 1;
 
-  if (adapter.id === "tm") {
-    recipes = result?.data?.recipes ?? [];
-    total = result?.data?.total ?? recipes.length;
-    totalPage = result?.data?.totalPage ?? 1;
-  } else {
-    recipes = (result?.data?.recipes ?? []).map((recipe: any) => ({
-      id: recipe.id,
-      title: recipe.title,
-      status: recipe.status,
-      updatedAt: recipe.updatedAt,
-      deviceTypes: recipe.deviceTypes,
-      ingredientCount: recipe.ingredientCount,
-      stepCount: recipe.stepCount,
-      hasImage: recipe.hasImage,
-      hasHints: recipe.hasHints
-    }));
-    total = result?.data?.total ?? recipes.length;
-    totalPage = result?.data?.totalPage ?? 1;
-  }
+  recipes = result?.data?.recipes ?? [];
+  total = result?.data?.total ?? recipes.length;
+  totalPage = result?.data?.totalPage ?? 1;
 
   if (options.search) {
     const query = String(options.search).toLowerCase();
@@ -1247,17 +645,7 @@ async function listRecipesCommand(options: any) {
     );
   }
 
-  const formattedRecipes = recipes.map((recipe: any) => {
-    let recipeUrl = recipe.recipeUrl;
-    if (!recipeUrl && recipe.id) {
-      if (adapter.id === "tm") {
-        const loc = getLocalization(getTmLocale("de-DE"));
-        recipeUrl = `https://${loc.domain}/created-recipes/${loc.language}/${recipe.id}`;
-      } else {
-        recipeUrl = `https://www.monsieur-cuisine.com/connect-recipes?recipe-id=${recipe.id}`;
-      }
-    }
-    return {
+  const formattedRecipes = recipes.map((recipe: any) => ({
       id: recipe.id,
       title: recipe.title,
       status: recipe.status,
@@ -1267,24 +655,14 @@ async function listRecipesCommand(options: any) {
       stepCount: recipe.stepCount,
       hasImage: recipe.hasImage,
       hasHints: recipe.hasHints,
-      recipeUrl
-    };
-  });
+      recipeUrl: recipe.recipeUrl
+    }));
 
   printOutput({
     total,
     totalPage,
     recipes: formattedRecipes
   }, program.optsWithGlobals().json, (v) => formatRecipesForTerminal(device, v));
-}
-
-function mapRecipeToInput(device: "mc" | "tm", recipe: any): any {
-  if (device === "tm") {
-    return recipe && recipe["@type"] === "Recipe"
-      ? mapOfficialCookidooToInput(recipe)
-      : mapCustomCookidooToInput(recipe);
-  }
-  return mapMonsieurCuisineToInput(recipe);
 }
 
 // ─── Other commands ───────────────────────────────────────────────────────────
@@ -1303,7 +681,7 @@ program
   .option("--keep-open", "Leave the browser window open after capturing cookies")
   .option("--no-install-browser", "Do not automatically download Playwright Chromium if it is missing")
   .action(async (options) => {
-    const device = await getOrPromptDevice(options);
+    const device = await resolveCommandDevice(options);
     const adapter = getDeviceAdapter(device);
     const cookieKey = adapter.id === "tm" ? "TM_COOKIE" : "MC_COOKIE";
     const localeKey = adapter.id === "tm" ? "TM_LOCALE" : "MC_LOCALE";
@@ -1442,7 +820,7 @@ program
   .description("Print the model-facing JSON schema.")
   .option("--device <device>", "Print schema for a specific device ('mc' or 'tm') (prompts if not specified)")
   .action(async (options) => {
-    const device = await getOrPromptDevice(options);
+    const device = await resolveCommandDevice(options);
     const adapter = getDeviceAdapter(device);
     printOutput(adapter.getSchema(), program.optsWithGlobals().json);
   });
@@ -1459,7 +837,7 @@ program
     if (options.mcFoodProcessor) {
       process.env.MC_HAS_FOOD_PROCESSOR = options.mcFoodProcessor.toLowerCase();
     }
-    const device = await getOrPromptDevice(options);
+    const device = await resolveCommandDevice(options);
     const excludeModes = options.excludeModes
       ? options.excludeModes.split(",").map((m: string) => m.trim())
       : [];
@@ -1483,7 +861,7 @@ program
   .description("Show verified and planned locale/catalog data for the targeted device.")
   .option("--device <device>", "Target device: 'mc' or 'tm' (prompts if not specified)")
   .action(async (options) => {
-    const device = await getOrPromptDevice(options);
+    const device = await resolveCommandDevice(options);
     if (device === "tm") {
       console.log("\n  Thermomix (Cookidoo) My Creations does not use a fixed category or complexity catalog.");
       console.log("  Recipes are uploaded as custom drafts with free-text content.");
@@ -1503,7 +881,7 @@ program
   .option("--cookie <cookie>", "Cookie header to check instead of saved configuration")
   .option("--no-check-auth", "Skip the live session check")
   .action(async (options) => {
-    const device = await getOrPromptDevice(options);
+    const device = await resolveCommandDevice(options);
     const report = await buildDoctorReport(device, options);
     printOutput(report, program.optsWithGlobals().json, formatDoctorForTerminal);
   });
@@ -1515,7 +893,7 @@ program
   .option("--device <device>", "Target device: 'mc' or 'tm' (prompts if not specified)")
   .option("--cookie <cookie>", "Cookie header")
   .action(async (options) => {
-    const device = await getOrPromptDevice(options);
+    const device = await resolveCommandDevice(options);
     const adapter = getDeviceAdapter(device);
     const activeCookie = requireCookieForDevice(device, options);
 
@@ -1545,7 +923,7 @@ program
   .option("--public", "Fetch from the public created-recipes endpoint instead of own (Thermomix only)")
   .option("--input", "Print mapped internal recipe input JSON instead of a pretty recipe view")
   .action(async (id, options) => {
-    const device = await getOrPromptDevice(options);
+    const device = await resolveCommandDevice(options);
     const adapter = getDeviceAdapter(device);
     const activeCookie = requireCookieForDevice(device, options);
 
@@ -1568,487 +946,7 @@ const isTestEnv = typeof process !== "undefined" && (
 
 if (!isTestEnv) {
   program.parseAsync().catch((error) => {
-    if (error instanceof MonsieurCuisineApiError) {
-      console.error(formatMonsieurCuisineApiError(error));
-    } else if (error instanceof AuthFlowError) {
-      console.error(formatAuthFlowError(error));
-    } else if (error instanceof CookidooError) {
-      console.error(formatCookidooError(error));
-    } else {
-      console.error(formatGenericCliError(error));
-    }
+    console.error(formatCliError(error));
     process.exitCode = 1;
   });
-}
-
-// ─── Output helpers ───────────────────────────────────────────────────────────
-
-function printOutput(value: any, isJson: boolean, customFormat?: (val: any) => string): void {
-  if (isJson) {
-    console.log(JSON.stringify(value, null, 2));
-    return;
-  }
-  if (customFormat) {
-    console.log(customFormat(value));
-  } else {
-    console.dir(value, { depth: null, colors: true });
-  }
-}
-
-function printSuggestedCommand(
-  cmdArgs: string[] | undefined,
-  options: any,
-  programOpts: any,
-  targetDevice: string,
-  imageMode: string | null,
-  shouldUpload: boolean,
-  isJsonMode: boolean,
-  wasPrompted: boolean
-): void {
-  if (isJsonMode || !cmdArgs || !wasPrompted) return;
-
-  const suggestedFlags: string[] = [];
-  if (typeof options.device === "undefined") {
-    suggestedFlags.push(`--device ${targetDevice}`);
-  }
-  if (targetDevice === "tm" && typeof options.tmVersion === "undefined" && process.env.TM_VERSION) {
-    suggestedFlags.push(`--tm-version ${process.env.TM_VERSION}`);
-  }
-  if (targetDevice === "mc" && typeof options.mcFoodProcessor === "undefined" && typeof process.env.MC_HAS_FOOD_PROCESSOR !== "undefined") {
-    suggestedFlags.push(`--mc-food-processor ${process.env.MC_HAS_FOOD_PROCESSOR}`);
-  }
-  const localeKey = targetDevice === "tm" ? "TM_LOCALE" : "MC_LOCALE";
-  if (typeof options.locale === "undefined" && typeof options.language === "undefined" && process.env[localeKey]) {
-    suggestedFlags.push(`--locale ${process.env[localeKey]}`);
-  }
-
-  const hasImageOption = options.noImage || options.useSourceImage || options.recreateImage || options.recreateImageWithSourceImages || options.imageReferenceSource;
-  if (!hasImageOption && imageMode) {
-    if (imageMode === "skip") suggestedFlags.push("--use-source-image");
-    else if (imageMode === "none") suggestedFlags.push("--no-image");
-    else if (imageMode === "generate") suggestedFlags.push("--recreate-image");
-    else if (imageMode === "generate-with-sources") suggestedFlags.push("--recreate-image-with-source-images");
-  }
-
-  if (typeof options.alwaysUpload === "undefined" && typeof options.dryRun === "undefined") {
-    if (shouldUpload) {
-      suggestedFlags.push("--always-upload");
-    } else {
-      suggestedFlags.push("--dry-run");
-    }
-  }
-
-  if (programOpts.saveSettings !== false && process.env.SAVE_SETTINGS === "false") {
-    suggestedFlags.push("--no-save-settings");
-  }
-
-  if (suggestedFlags.length > 0) {
-    const quote = (val: string) => val.includes(" ") ? `"${val}"` : val;
-    const cmdStr = ["smart-recipe", ...cmdArgs.map(quote), ...suggestedFlags].join(" ");
-    console.log(`\n  \x1b[2mNext time, in order to pick these settings, execute with:\x1b[0m`);
-    console.log(`  \x1b[36m$ ${cmdStr}\x1b[0m\n`);
-  }
-}
-
-function summarizeImportResult(result: Awaited<ReturnType<typeof importRecipeFromUrl>>) {
-  const draft =
-    typeof result.draft === "object" && result.draft
-      ? result.draft as { id?: unknown; title?: unknown; status?: unknown }
-      : undefined;
-
-  if (draft) {
-    return {
-      id: draft.id,
-      title: draft.title ?? result.recipeInput.title,
-      status: draft.status,
-      recipeUrl: result.recipeUrl,
-      image: result.uploadedImage,
-      imageSource: result.recipeImage?.source
-    };
-  }
-
-  return {
-    title: result.recipeInput.title,
-    recipeInput: result.recipeInput,
-    payload: result.payload
-  };
-}
-
-function printableImportResult(result: Awaited<ReturnType<typeof importRecipeFromUrl>>) {
-  return {
-    page: {
-      url: result.page.url,
-      finalUrl: result.page.finalUrl,
-      title: result.page.title,
-      markdownChars: result.page.markdown.length,
-      images: result.page.images.map((image) => ({
-        url: image.url,
-        contentType: image.contentType,
-        score: image.score,
-        reason: image.reason,
-        bytes: image.bytes?.byteLength ?? 0
-      }))
-    },
-    recipeInput: result.recipeInput,
-    payload: result.payload,
-    recipeImage: result.recipeImage,
-    uploadedImage: result.uploadedImage,
-    draft: result.draft,
-    recipeUrl: result.recipeUrl
-  };
-}
-
-function formatMonsieurCuisineApiError(error: MonsieurCuisineApiError): string {
-  return [
-    `${error.name}: ${error.message}`,
-    error.status === undefined ? undefined : `Status: ${error.status}`,
-    error.code === undefined ? undefined : `Code: ${error.code}`,
-    error.endpoint === undefined ? undefined : `Endpoint: ${error.endpoint}`,
-    error.response === undefined ? undefined : "Response:",
-    error.response === undefined ? undefined : JSON.stringify(error.response, null, 2)
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function formatAuthFlowError(error: AuthFlowError): string {
-  return [
-    `${error.name}: ${error.message}`,
-    `Code: ${error.code}`,
-    error.response === undefined ? undefined : "Response:",
-    error.response === undefined ? undefined : JSON.stringify(error.response, null, 2)
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function formatCookidooError(error: CookidooError): string {
-  return [
-    `${error.name}: ${error.message}`,
-    error.status === undefined ? undefined : `Status: ${error.status}`,
-    error.method === undefined ? undefined : `Method: ${error.method}`,
-    error.url === undefined ? undefined : `URL: ${error.url}`,
-    error.body === undefined ? undefined : "Body:",
-    error.body === undefined ? undefined : JSON.stringify(error.body, null, 2)
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function formatGenericCliError(error: any): string {
-  const message = error?.stack || error?.message || String(error);
-  const plain = error?.message || String(error);
-  const suggestions: string[] = [];
-
-  if (/No .* cookie found/i.test(plain)) {
-    suggestions.push("Run smart-recipe login-browser --device <mc|tm> --save to refresh the saved session.");
-    suggestions.push("Run smart-recipe doctor --device <mc|tm> to inspect configuration.");
-  }
-  if (/source ingestion requires .* cookie/i.test(plain)) {
-    suggestions.push("Run smart-recipe login-browser --device <mc|tm> to obtain a fresh session cookie.");
-  }
-  if (/session is missing or expired/i.test(plain)) {
-    suggestions.push("Open the login browser and retry when prompted.");
-  }
-  if (/unknown option/i.test(plain)) {
-    suggestions.push("Run smart-recipe --help or smart-recipe <command> --help to see supported options.");
-  }
-  if (/OPENAI_API_KEY/i.test(plain)) {
-    suggestions.push("Set OPENAI_API_KEY in the environment or ~/.smart-recipe.");
-  }
-
-  if (suggestions.length === 0) return message;
-  return [
-    message,
-    "",
-    "Suggested next steps:",
-    ...suggestions.map((suggestion) => `- ${suggestion}`)
-  ].join("\n");
-}
-
-export function mapMonsieurCuisineToInput(recipe: any): any {
-  const serving = recipe.servingSizes?.[0] || recipe.servingSize || {};
-  return {
-    title: recipe.title || "Recipe",
-    description: recipe.description || "",
-    settings: {
-      locale: recipe.languageLocale || "de-DE",
-      complexityId: recipe.complexity?.id || 142
-    },
-    status: recipe.status,
-    nutrients: recipe.nutrients,
-    servingSize: {
-      amount: serving.amount || 1,
-      unit: serving.unit || "Portion",
-      preparationTime: serving.preparationTime || 0,
-      readyInTime: serving.readyInTime || 0,
-      ingredientGroups: (serving.ingredientGroups || []).map((g: any) => ({
-        name: g.name || "",
-        ingredients: (g.ingredients || []).map((i: any) => ({
-          name: i.name,
-          amount: i.amount || "",
-          unit: i.unit || "",
-          isOptional: i.isOptional
-        }))
-      })),
-      steps: (serving.steps || []).map((s: any) => {
-        let mappedMode: any = { type: "none" };
-        if (s.mode) {
-          const type = s.mode.type;
-          const settings = s.mode.deviceSettings?.[0] || {};
-          const duration = settings.time || 0;
-          const mins = Math.floor(duration / 60);
-          const secs = duration % 60;
-          
-          if (type === "manualCooking" || type === "manual_cooking") {
-            mappedMode = {
-              type: "manualCooking",
-              temperature: settings.temperature || 0,
-              minutes: mins,
-              seconds: secs,
-              speed: settings.speed || 0,
-              rotationDirection: settings.clockwise === false ? "left" : "right"
-            };
-          } else if (type === "turbo") {
-            mappedMode = { type: "turbo", seconds: duration };
-          } else if (type === "scale") {
-            mappedMode = { type: "scale", grams: settings.weight || 0 };
-          } else if (type === "roasting" || type === "roast") {
-            mappedMode = {
-              type: "roast",
-              temperature: settings.temperature || 0,
-              minutes: mins,
-              seconds: secs
-            };
-          } else if (type === "solid_dough_knead" || type === "solidDoughKnead") {
-            mappedMode = { type: "solidDoughKnead", minutes: mins, seconds: secs };
-          } else if (type === "soft_dough_knead" || type === "softDoughKnead") {
-            mappedMode = { type: "softDoughKnead", minutes: mins, seconds: secs };
-          } else if (type === "liquid_dough_knead" || type === "liquidDoughKnead") {
-            mappedMode = { type: "liquidDoughKnead", minutes: mins, seconds: secs };
-          } else if (type === "steam" || type === "steaming") {
-            mappedMode = { type: "steam", minutes: mins, seconds: secs };
-          } else if (type === "sous_vide" || type === "sousVide") {
-            mappedMode = { type: "sousVide", temperature: settings.temperature || 0, minutes: mins, seconds: secs };
-          } else if (type === "slow_cooking" || type === "slowCooking") {
-            mappedMode = { type: "slowCooking", temperature: settings.temperature || 0, minutes: mins, seconds: secs };
-          } else if (type === "cooking_eggs" || type === "cookingEggs") {
-            mappedMode = { type: "cookingEggs", size: s.mode.modeSetting?.size || "medium", texture: s.mode.modeSetting?.texture || "waxy_soft" };
-          } else if (type === "precleaning") {
-            mappedMode = { type: "precleaning", duration: s.mode.modeSetting?.duration || "short" };
-          } else if (type === "fermentation") {
-            mappedMode = { type: "fermentation", temperature: settings.temperature || 0, minutes: mins, seconds: secs };
-          } else if (type === "rice_cooking" || type === "riceCooking") {
-            mappedMode = { type: "riceCooking", minutes: mins, seconds: secs };
-          } else if (type === "food_cooking" || type === "foodProcessor") {
-            mappedMode = { type: "foodProcessor", minutes: mins, seconds: secs };
-          } else if (type === "puree") {
-            mappedMode = { type: "puree", minutes: mins, seconds: secs };
-          } else if (type === "smoothie") {
-            mappedMode = { type: "smoothie", minutes: mins, seconds: secs };
-          }
-        }
-        return {
-          title: s.title || s.description || s.text || "",
-          description: s.title ? (s.description || s.text || "") : "",
-          mode: mappedMode
-        };
-      })
-    }
-  };
-}
-
-export function formatRecipeForTerminal(device: "mc" | "tm", recipe: any): string {
-  const adapter = getDeviceAdapter(device);
-  
-  if (device === "tm") {
-    let input: CookidooRecipeInput;
-    const looksLikeOfficialCookidooRecipe =
-      Boolean(recipe && (
-        recipe["@type"] === "Recipe" ||
-        recipe.recipeIngredientGroups ||
-        recipe.recipeStepGroups ||
-        recipe.servingSize
-    ));
-    if (looksLikeOfficialCookidooRecipe) {
-      input = mapOfficialCookidooToInput(recipe);
-    } else {
-      input = mapCustomCookidooToInput(recipe);
-    }
-    return adapter.formatInputForTerminal(input);
-  } else {
-    const input = mapMonsieurCuisineToInput(recipe?.data?.recipe ?? recipe);
-    return adapter.formatInputForTerminal(input);
-  }
-}
-
-export function formatUserForTerminal(device: "mc" | "tm", user: any): string {
-  const parts: string[] = [];
-  const boldMagenta = "\x1b[1m\x1b[95m";
-  const boldCyan = "\x1b[1m\x1b[36m";
-  const reset = "\x1b[0m";
-  const gray = "\x1b[90m";
-  const boldYellow = "\x1b[1m\x1b[93m";
-
-  const title = "User Session Profile";
-  const line = "─".repeat(title.length + 4);
-  parts.push("");
-  parts.push(`  ${gray}┌${line}┐${reset}`);
-  parts.push(`  ${gray}│  ${reset}${boldMagenta}${title}${reset}${gray}  │${reset}`);
-  parts.push(`  ${gray}└${line}┘${reset}`);
-  parts.push("");
-
-  const devName = device === "tm" ? "Thermomix (Cookidoo)" : "Monsieur Cuisine";
-  let name = "N/A";
-  let email = "N/A";
-  let locale = "de-DE";
-
-  if (device === "tm") {
-    const userInfo = user.userInfo ?? {};
-    name = `${user.givenName ?? ""} ${user.lastName ?? ""}`.trim() || userInfo.username || "N/A";
-    email = user.email || "N/A";
-    locale = user.locale || "de-DE";
-  } else {
-    name = user.displayName || user.nickname || user.username || `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || "N/A";
-    email = user.email || "N/A";
-    locale = user.languageLocale || "de-DE";
-  }
-
-  parts.push(`  Device:     ${boldCyan}${devName}${reset}`);
-  if (user.id) parts.push(`  ID:         ${boldCyan}${user.id}${reset}`);
-  parts.push(`  Name:       ${boldCyan}${name}${reset}`);
-  parts.push(`  Email:      ${boldCyan}${email}${reset}`);
-  parts.push(`  Locale:     ${boldCyan}${locale}${reset}`);
-
-  if (device === "tm") {
-    const userInfo = user.userInfo ?? {};
-    parts.push(`  Public:     ${boldCyan}${formatBoolean(user.isPublic)}${reset}`);
-    if (userInfo.picture) parts.push(`  Picture:    ${boldCyan}${userInfo.picture}${reset}`);
-    if (userInfo.pictureTemplate) parts.push(`  PictureTpl: ${boldCyan}${userInfo.pictureTemplate}${reset}`);
-
-    const savedSearches = Array.isArray(user.savedSearches) ? user.savedSearches : [];
-    parts.push("");
-    parts.push(`  ${boldYellow}Saved Searches${reset}`);
-    if (savedSearches.length === 0) {
-      parts.push(`    ${gray}None${reset}`);
-    } else {
-      savedSearches.forEach((savedSearch: any, index: number) => {
-        const search = savedSearch.search ?? {};
-        parts.push(`    ${index + 1}. ${boldCyan}${savedSearch.id ?? "unnamed"}${reset}`);
-        parts.push(`       Countries:    ${formatList(search.countries)}`);
-        parts.push(`       Languages:    ${formatList(search.languages)}`);
-        parts.push(`       Accessories:  ${formatAccessoryList(search.accessories)}`);
-      });
-    }
-
-    parts.push("");
-    parts.push(`  ${boldYellow}Food Preferences${reset}`);
-    parts.push(`    ${formatList(user.foodPreferences)}`);
-
-    parts.push("");
-    parts.push(`  ${boldYellow}Thermomixes${reset}`);
-    const thermomixes = Array.isArray(user.thermomixes) ? user.thermomixes : [];
-    if (thermomixes.length === 0) {
-      parts.push(`    ${gray}None registered in profile response${reset}`);
-    } else {
-      thermomixes.forEach((tm: any, index: number) => {
-        parts.push(`    ${index + 1}. ${formatObjectSummary(tm)}`);
-      });
-    }
-
-    if (user.meta && Object.keys(user.meta).length > 0) {
-      parts.push("");
-      parts.push(`  ${boldYellow}Meta${reset}`);
-      Object.entries(user.meta).forEach(([key, value]) => {
-        parts.push(`    ${key}: ${formatScalar(value)}`);
-      });
-    }
-  }
-
-  parts.push("");
-
-  return parts.join("\n");
-}
-
-function formatBoolean(value: unknown): string {
-  if (value === true) return "yes";
-  if (value === false) return "no";
-  return "N/A";
-}
-
-function formatList(value: unknown): string {
-  if (!Array.isArray(value) || value.length === 0) return "None";
-  return value.map(formatScalar).join(", ");
-}
-
-function formatAccessoryList(value: unknown): string {
-  if (!Array.isArray(value) || value.length === 0) return "None";
-  return value.map((accessory) => {
-    const raw = String(accessory);
-    const label = TM_ACCESSORY_LABELS[raw];
-    return label ? `${label} (${raw})` : raw;
-  }).join(", ");
-}
-
-function formatObjectSummary(value: unknown): string {
-  if (!value || typeof value !== "object") return formatScalar(value);
-  return Object.entries(value as Record<string, unknown>)
-    .map(([key, entryValue]) => `${key}: ${formatScalar(entryValue)}`)
-    .join(", ");
-}
-
-function formatScalar(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "N/A";
-  if (Array.isArray(value)) return formatList(value);
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
-const TM_ACCESSORY_LABELS: Record<string, string> = {
-  includingFriend: "Thermomix Friend",
-  includingBladeCover: "Blade Cover",
-  includingBladeCoverWithPeeler: "Blade Cover with Peeler",
-  includingCutter: "Thermomix Cutter",
-  includingCutterPlus: "Thermomix Cutter+",
-  includingSensor: "Thermomix Sensor",
-};
-
-export function formatDraftsForTerminal(device: "mc" | "tm", result: any): string {
-  const parts: string[] = [];
-  const boldMagenta = "\x1b[1m\x1b[95m";
-  const boldCyan = "\x1b[1m\x1b[36m";
-  const boldGreen = "\x1b[1m\x1b[92m";
-  const boldYellow = "\x1b[1m\x1b[93m";
-  const reset = "\x1b[0m";
-  const gray = "\x1b[90m";
-
-  const count = result.recipes?.length ?? 0;
-  const title = `Draft Recipes List (${count} drafts found)`;
-  const line = "─".repeat(title.length + 4);
-  parts.push("");
-  parts.push(`  ${gray}┌${line}┐${reset}`);
-  parts.push(`  ${gray}│  ${reset}${boldMagenta}${title}${reset}${gray}  │${reset}`);
-  parts.push(`  ${gray}└${line}┘${reset}`);
-  parts.push("");
-
-  if (count === 0) {
-    parts.push(`  ${boldYellow}No drafts found on this device.${reset}`);
-    parts.push("");
-    return parts.join("\n");
-  }
-
-  result.recipes.forEach((recipe: any, idx: number) => {
-    parts.push(`  ${boldGreen}[${idx + 1}]${reset}  ${boldCyan}${recipe.title}${reset} (${recipe.status || "draft"})`);
-    parts.push(`       ID:  ${recipe.id}`);
-    if (recipe.recipeUrl) {
-      parts.push(`       URL: ${recipe.recipeUrl}`);
-    }
-    if (recipe.updatedAt) {
-      const dateStr = recipe.updatedAt.slice(0, 10);
-      parts.push(`       Updated: ${dateStr}`);
-    }
-    parts.push("");
-  });
-
-  return parts.join("\n");
 }

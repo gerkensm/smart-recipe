@@ -134,7 +134,45 @@ export function formatRecipesForTerminal(device: "mc" | "tm", result: any): stri
   return parts.join("\n");
 }
 
-export const formatDraftsForTerminal = formatRecipesForTerminal;
+export function formatDraftsForTerminal(_device: "mc" | "tm", result: any): string {
+  const parts: string[] = [];
+  const boldMagenta = "\x1b[1m\x1b[95m";
+  const boldCyan = "\x1b[1m\x1b[36m";
+  const boldGreen = "\x1b[1m\x1b[92m";
+  const boldYellow = "\x1b[1m\x1b[93m";
+  const reset = "\x1b[0m";
+  const gray = "\x1b[90m";
+
+  const count = result.recipes?.length ?? 0;
+  const title = `Draft Recipes List (${count} drafts found)`;
+  const line = "─".repeat(title.length + 4);
+  parts.push("");
+  parts.push(`  ${gray}┌${line}┐${reset}`);
+  parts.push(`  ${gray}│  ${reset}${boldMagenta}${title}${reset}${gray}  │${reset}`);
+  parts.push(`  ${gray}└${line}┘${reset}`);
+  parts.push("");
+
+  if (count === 0) {
+    parts.push(`  ${boldYellow}No drafts found on this device.${reset}`);
+    parts.push("");
+    return parts.join("\n");
+  }
+
+  result.recipes.forEach((recipe: any, idx: number) => {
+    parts.push(`  ${boldGreen}[${idx + 1}]${reset}  ${boldCyan}${recipe.title}${reset} (${recipe.status || "draft"})`);
+    parts.push(`       ID:  ${recipe.id}`);
+    if (recipe.recipeUrl) {
+      parts.push(`       URL: ${recipe.recipeUrl}`);
+    }
+    if (recipe.updatedAt) {
+      const dateStr = recipe.updatedAt.slice(0, 10);
+      parts.push(`       Updated: ${dateStr}`);
+    }
+    parts.push("");
+  });
+
+  return parts.join("\n");
+}
 
 export function formatDoctorForTerminal(report: any): string {
   const parts: string[] = [];

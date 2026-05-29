@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OpenAIRecipeGenerator } from "../src/llm/openai-generator.js";
 import { accessoryHardwareRules, buildRecipeImagePrompt, buildRecipeInstructions } from "../src/llm/prompts.js";
+import { MonsieurCuisineAdapter } from "../src/devices/mc/adapter.js";
 import type { RecipeInput } from "../src/recipes/schema.js";
 import type { RetrievedRecipePage } from "../src/retriever/types.js";
 
@@ -91,7 +92,11 @@ describe("LLM prompt guidance", () => {
         }
       }
     };
-    const generator = new OpenAIRecipeGenerator({ client: client as any, locale: "en-US" });
+    const generator = new OpenAIRecipeGenerator({
+      client: client as any,
+      locale: "en-US",
+      adapter: new MonsieurCuisineAdapter()
+    });
 
     await generator.generate(pageFixture, { locale: "en-US" });
 
