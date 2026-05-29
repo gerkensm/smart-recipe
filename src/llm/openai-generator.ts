@@ -1,11 +1,8 @@
 import OpenAI from "openai";
-import { RecipeInputSchema, type RecipeInput } from "../recipes/schema.js";
-import { assertRecipeInput, validateRecipeInput } from "../recipes/validation.js";
-import { normalizeRecipeInput } from "../recipes/normalize.js";
 import type { RetrievedRecipePage } from "../retriever/types.js";
 import type { RecipeGenerationOptions, RecipeGenerator } from "./types.js";
 import { makeOpenAIStrictSchema } from "./schema-format.js";
-import { buildRecipeInstructions } from "./prompts.js";
+import { MonsieurCuisineAdapter } from "../devices/mc/adapter.js";
 
 export interface OpenAIRecipeGeneratorOptions extends RecipeGenerationOptions {
   client?: OpenAI;
@@ -22,25 +19,27 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
       reasoningEffort: options.reasoningEffort ?? (process.env.OPENAI_REASONING_EFFORT as any) ?? "medium",
       locale: options.locale ?? "de-DE",
       maxCorrectionAttempts: options.maxCorrectionAttempts ?? 3,
-      excludeModes: options.excludeModes ?? []
+      excludeModes: options.excludeModes ?? [],
+      adapter: options.adapter ?? new MonsieurCuisineAdapter()
     };
   }
 
-  async generate(page: RetrievedRecipePage, options: RecipeGenerationOptions = {}): Promise<RecipeInput> {
+  async generate(page: RetrievedRecipePage, options: RecipeGenerationOptions = {}): Promise<any> {
     const cleanOptions = Object.fromEntries(
       Object.entries(options).filter(([_, v]) => v !== undefined)
     );
-    const finalOptions = { ...this.defaults, ...cleanOptions };
+    const finalOptions = { ...this.defaults, ...cleanOptions } as Required<RecipeGenerationOptions>;
     let feedback: { errors: string[]; previous: unknown } | undefined;
+
+    const adapter = finalOptions.adapter;
 
     for (let attempt = 0; attempt <= finalOptions.maxCorrectionAttempts; attempt += 1) {
       const output = await this.generateOnce(page, finalOptions, feedback);
-      const validation = validateRecipeInput(output);
+      const validation = adapter.validateInput(output);
       const excludedErrors = validateExcludedModes(output, finalOptions.excludeModes);
       const allErrors = [...validation.errors, ...excludedErrors];
       if (validation.ok && excludedErrors.length === 0) {
-        assertRecipeInput(output);
-        return normalizeRecipeInput(output);
+        return adapter.normalizeInput(output);
       }
       feedback = { errors: allErrors, previous: output };
     }
@@ -53,8 +52,10 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
     options: Required<RecipeGenerationOptions>,
     feedback?: { errors: string[]; previous: unknown }
   ): Promise<unknown> {
-    const strictSchema = makeOpenAIStrictSchema(RecipeInputSchema);
-    const fullSchemaText = JSON.stringify(RecipeInputSchema, null, 2);
+    const adapter = options.adapter;
+    const schema = adapter.getSchema(options);
+    const strictSchema = makeOpenAIStrictSchema(schema);
+    const fullSchemaText = JSON.stringify(schema, null, 2);
     const correctionText = feedback
       ? [
         "Previous generated JSON failed validation.",
@@ -74,13 +75,13 @@ export class OpenAIRecipeGenerator implements RecipeGenerator {
       text: {
         format: {
           type: "json_schema",
-          name: "monsieur_cuisine_smart_recipe",
+          name: adapter.id === "tm" ? "thermomix_cookidoo_recipe" : "monsieur_cuisine_smart_recipe",
           strict: true,
-          description: "Model-friendly Monsieur Cuisine Smart recipe input.",
+          description: adapter.id === "tm" ? "Model-friendly Thermomix Cookidoo recipe input." : "Model-friendly Monsieur Cuisine Smart recipe input.",
           schema: strictSchema
         }
       },
-      instructions: buildRecipeInstructions(options.locale, options.excludeModes),
+      instructions: adapter.getPromptInstructions(options.locale, options),
       input: [
         {
           role: "user",
@@ -126,12 +127,28 @@ function validateExcludedModes(output: unknown, excludeModes: string[] = []): st
   if (!finalExcludeModes.length || typeof output !== "object" || !output) return [];
   const excluded = new Set(finalExcludeModes);
   const errors: string[] = [];
-  const steps: unknown[] = (output as any)?.servingSize?.steps ?? [];
-  steps.forEach((step: any, index: number) => {
+
+  // MC structure
+  const mcSteps: unknown[] = (output as any)?.servingSize?.steps ?? [];
+  mcSteps.forEach((step: any, index: number) => {
     const modeType = step?.mode?.type;
     if (modeType && excluded.has(modeType)) {
       errors.push(`/servingSize/steps/${index}/mode/type must not be "${modeType}" — this mode requires an accessory the user does not own. Replace it with an alternative mode or type "none".`);
     }
   });
+
+  // TM structure
+  const tmSteps: unknown[] = (output as any)?.steps ?? [];
+  tmSteps.forEach((step: any, index: number) => {
+    const annotations: any[] = step?.modeAnnotations ?? [];
+    annotations.forEach((ann: any, annIdx: number) => {
+      const modeType = ann?.mode?.type;
+      if (modeType && excluded.has(modeType)) {
+        errors.push(`/steps/${index}/modeAnnotations/${annIdx}/mode/type must not be "${modeType}" — this mode requires an accessory the user does not own. Replace it with an alternative mode.`);
+      }
+    });
+  });
+
   return errors;
 }
+

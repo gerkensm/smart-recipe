@@ -1,7 +1,7 @@
 {
   "name": "smart-recipe",
   "version": "0.1.0",
-  "description": "TypeScript tools for generating and uploading Monsieur Cuisine Smart recipes.",
+  "description": "TypeScript tools for retrieving, converting, and uploading smart-cooker recipes.",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -31,6 +31,14 @@
       "types": "./dist/mc/index.d.ts",
       "import": "./dist/mc/index.js"
     },
+    "./devices": {
+      "types": "./dist/devices/index.d.ts",
+      "import": "./dist/devices/index.js"
+    },
+    "./tm": {
+      "types": "./dist/devices/tm/index.d.ts",
+      "import": "./dist/devices/tm/index.js"
+    },
     "./recipes": {
       "types": "./dist/recipes/index.d.ts",
       "import": "./dist/recipes/index.js"
@@ -38,6 +46,10 @@
     "./retriever": {
       "types": "./dist/retriever/index.d.ts",
       "import": "./dist/retriever/index.js"
+    },
+    "./sources": {
+      "types": "./dist/sources/index.d.ts",
+      "import": "./dist/sources/index.js"
     },
     "./pipeline": {
       "types": "./dist/pipeline/index.d.ts",

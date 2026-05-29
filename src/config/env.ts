@@ -64,3 +64,31 @@ function quoteDotEnvValue(value: string): string {
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+export function getTargetDevice(fallback: "mc" | "tm" = "mc"): "mc" | "tm" {
+  const val = (process.env.TARGET_DEVICE ?? "").trim().toLowerCase();
+  if (val === "tm" || val === "thermomix") return "tm";
+  if (val === "mc" || val === "monsieurcuisine") return "mc";
+  return fallback;
+}
+
+export function getTmVersion(fallback: "tm6" | "tm5" | "tm7" = "tm6"): "tm6" | "tm5" | "tm7" {
+  const val = (process.env.TM_VERSION ?? "").trim().toLowerCase();
+  if (val === "tm5") return "tm5";
+  if (val === "tm6") return "tm6";
+  if (val === "tm7") return "tm7";
+  return fallback;
+}
+
+export function getTmLocale(fallback = "de-DE"): string {
+  return (process.env.TM_LOCALE ?? fallback).trim();
+}
+
+export function getTmCookie(): string | undefined {
+  return process.env.TM_COOKIE || process.env.TM_COOKIES;
+}
+
+export function mcHasFoodProcessor(): boolean {
+  const val = (process.env.MC_HAS_FOOD_PROCESSOR ?? "").trim().toLowerCase();
+  return val === "true";
+}
+

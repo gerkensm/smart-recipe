@@ -1,13 +1,13 @@
 # SmartRecipe
 
-**Turn almost any recipe page into an editable Monsieur Cuisine Smart recipe draft.**
+**Turn almost any recipe page into an editable Monsieur Cuisine Smart or Thermomix recipe draft.**
 
-SmartRecipe reads a recipe from the web, asks OpenAI to turn it into a Monsieur Cuisine Smart workflow, displays it in the terminal, and optionally creates a draft in your Monsieur Cuisine account. You can then open the draft, review it, edit it, and cook it on your device.
+SmartRecipe reads a recipe from the web, asks OpenAI to turn it into a device-compatible workflow (Monsieur Cuisine Smart or Thermomix TM5/TM6/TM7), displays it in the terminal, and optionally creates a draft in your account. You can then open the draft, review it, edit it, and cook it on your device.
 
-It is made for people who find good recipes online but do not want to manually rebuild every ingredient, weighing step, cooking mode, temperature, speed, and image inside the Monsieur Cuisine app.
+It is made for people who find good recipes online but do not want to manually rebuild every ingredient, weighing step, cooking mode, temperature, speed, and image inside their appliance's app.
 
 > [!IMPORTANT]
-> SmartRecipe is built for **Monsieur Cuisine Smart / MC3.0**. It does **not** support the older **Monsieur Cuisine connect / MC2.0**, because user-created recipes do not reliably sync to that device.
+> SmartRecipe is built for modern smart cookers. For Monsieur Cuisine, it supports the **Monsieur Cuisine Smart / MC3.0** (not the older Monsieur Cuisine connect / MC2.0). For Thermomix, it supports the **Thermomix TM7**, **TM6**, and **TM5** devices.
 
 ---
 
@@ -16,16 +16,16 @@ It is made for people who find good recipes online but do not want to manually r
 Give SmartRecipe a recipe URL:
 
 ```bash
-smart-recipe import-url "https://example.com/my-favorite-recipe"
+smart-recipe create "https://example.com/my-favorite-recipe"
 ```
 
 It will:
 
-1. Read the recipe page and show you the extracted markdown.
+1. Read the recipe page, or retrieve an authenticated Monsieur Cuisine / Cookidoo recipe by URL.
 2. Ask for your OpenAI API key if none is configured (and offer to save it).
-3. Convert the recipe into a Monsieur Cuisine Smart workflow.
+3. Convert the recipe into a device-compatible workflow (Monsieur Cuisine Smart or Thermomix TM5/TM6/TM7).
 4. Display the fully formatted recipe in the terminal — ingredients, steps, modes, timings, and nutrients.
-5. Ask whether you want to upload it to Monsieur Cuisine.
+5. Ask whether you want to upload it to the selected device.
 6. If you do: guide you through authentication (browser login or cookie paste) and offer to save the session.
 7. Upload a recipe image from the page, or create a new one with OpenAI.
 
@@ -44,9 +44,11 @@ You still stay in control: SmartRecipe creates **drafts**, not final recipes. Re
 SmartRecipe is for you if you:
 
 * own a Monsieur Cuisine Smart
+* own a Thermomix TM7, TM6, or TM5
 * collect recipes from blogs, magazines, YouTube descriptions, or cooking sites
+* want to move recipes between normal web pages, Monsieur Cuisine, and Cookidoo
 * want to cook those recipes with guided Smart steps
-* dislike manually entering recipes into the Monsieur Cuisine ecosystem
+* dislike manually entering recipes into your appliance's recipe editor
 * want AI help adapting normal recipes into appliance-friendly workflows
 * are comfortable running a small command-line tool, or have someone who can set it up once for you
 
@@ -54,7 +56,7 @@ It is also useful for:
 
 * recipe bloggers who want to test Smart-compatible versions of their recipes
 * home cooks who want a private recipe collection on their device
-* developers who want a typed TypeScript toolkit for Monsieur Cuisine Smart recipe generation and upload
+* developers who want a typed TypeScript toolkit for retrieval, conversion, upload, and recipe interoperability
 
 ---
 
@@ -82,8 +84,8 @@ You need:
 * **Node.js 20.18 or newer**
 * **Git**
 * an **OpenAI API key**
-* a **Monsieur Cuisine / Lidl Plus account**
-* a **Monsieur Cuisine Smart device**
+* a **Monsieur Cuisine / Lidl Plus** account OR a **Thermomix / Cookidoo** account
+* a **Monsieur Cuisine Smart** OR a **Thermomix TM7 / TM6 / TM5** device
 
 OpenAI API usage may cost money, depending on your OpenAI account and the model you use.
 
@@ -153,31 +155,57 @@ You can also use `.env.example` as a starting point.
 
 ---
 
-## Log in to Monsieur Cuisine
+## Device Setup & Login
 
-You do not need to set anything up in advance. When you run `import-url` and choose to upload, SmartRecipe will ask how you want to authenticate:
+SmartRecipe supports both **Monsieur Cuisine** (MC) and **Thermomix** (TM). When you run `create` for the first time, it will interactively prompt you to choose your target device and (if targeting Thermomix) your Thermomix model (TM7, TM6, or TM5). It will offer to save these settings to `~/.smart-recipe`.
 
-* **Browser login** — opens a small Chromium window. Sign in with your Lidl Plus account. SmartRecipe captures the cookie automatically.
-* **Paste cookie** — shows step-by-step instructions for copying the cookie from your browser's DevTools, then saves it for you.
+You can also specify the target device via environment variables or CLI options (e.g. `--device tm --tm-version tm7`).
 
-In both cases SmartRecipe offers to save the session to `~/.smart-recipe` so you do not need to log in again.
+`create` is the recommended command name. `import-url` remains as a compatibility alias.
+
+### Log in to Monsieur Cuisine or Thermomix
+
+When you choose to upload, SmartRecipe checks if you have a valid session. If not, it will ask how you want to authenticate:
+
+* **Browser login** — opens a small Chromium window. Sign in with your Lidl Plus (MC) or Cookidoo (TM) account. SmartRecipe captures the session cookie automatically.
+* **Paste cookie** — shows step-by-step instructions for copying the cookie from your browser's DevTools, then saves it.
+
+In both cases, SmartRecipe offers to save the session to `~/.smart-recipe` so you do not need to log in again.
+
+Current interactive prompts cover:
+
+* target device (`mc` or `tm`)
+* Thermomix model (`tm7`, `tm6`, or `tm5`) when targeting Thermomix
+* optional Monsieur Cuisine food processor/cutter attachment ownership
+* OpenAI API key and whether to save it
+* upload or dry-run decision
+* image handling: source image, no image, fresh generated image, or generated image with source images as references
+* login method and whether to save the captured session cookie
 
 ### Log in in advance
 
 If you prefer to authenticate before your first import:
 
 ```bash
-smart-recipe login-browser --save
+# For Monsieur Cuisine
+smart-recipe login-browser --device mc --save
+
+# For Thermomix
+smart-recipe login-browser --device tm --save
 ```
 
-This opens a small browser window. Log in with your normal Lidl Plus / Monsieur Cuisine account. SmartRecipe captures the session cookie and stores it in `~/.smart-recipe`.
+This opens a small browser window. Log in with your normal Lidl Plus or Cookidoo account. SmartRecipe captures the session cookie and stores it in `~/.smart-recipe`.
 
 ### Pass a cookie directly
 
 If you already have a cookie (from DevTools → Network → any request → Request Headers → `Cookie:`), pass it with `--cookie`:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --cookie "cookie_name=value; ..."
+# Monsieur Cuisine
+smart-recipe import-url "https://example.com/recipe" --device mc --cookie "cookie_name=value; ..."
+
+# Thermomix
+smart-recipe import-url "https://example.com/recipe" --device tm --cookie "cookie_name=value; ..."
 ```
 
 Or store it permanently:
@@ -185,10 +213,11 @@ Or store it permanently:
 ```bash
 # in .env or ~/.smart-recipe
 MC_COOKIE="cookie_name=value; another_cookie=value; ..."
+TM_COOKIE="cookie_name=value; another_cookie=value; ..."
 ```
 
 > [!WARNING]
-> Your Monsieur Cuisine cookie acts like a login session. Keep it private. Do not commit `.env`, `~/.smart-recipe`, logs, screenshots, terminal history, or pasted cookies to GitHub. If you accidentally share it, log out of Monsieur Cuisine / Lidl Plus and log back in to invalidate the old session.
+> Your session cookies act like login sessions. Keep them private. Do not commit `.env`, `~/.smart-recipe`, logs, screenshots, terminal history, or pasted cookies to GitHub. If you accidentally share a cookie, log out of your Monsieur Cuisine / Lidl Plus or Cookidoo account and log back in to invalidate the old session.
 
 ---
 
@@ -197,7 +226,7 @@ MC_COOKIE="cookie_name=value; another_cookie=value; ..."
 Just run:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe"
+smart-recipe create "https://example.com/recipe"
 ```
 
 SmartRecipe will walk you through everything interactively — API key, recipe generation, a preview in the terminal, and whether to upload.
@@ -205,16 +234,35 @@ SmartRecipe will walk you through everything interactively — API key, recipe g
 If you want to skip every prompt and always upload automatically:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --yes
+smart-recipe create "https://example.com/recipe" --always-upload
 ```
 
 If you want to generate the recipe and inspect it without uploading:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --dry-run
+smart-recipe create "https://example.com/recipe" --dry-run
 ```
 
 After upload, SmartRecipe prints the draft URL. Open it, review the recipe, adjust anything that needs human judgment, and save it in your Monsieur Cuisine account.
+
+### Import from Monsieur Cuisine or Cookidoo
+
+`create` also accepts authenticated source recipes, not just public web pages:
+
+```bash
+# Cookidoo official recipe -> Monsieur Cuisine draft
+smart-recipe create "https://cookidoo.de/recipes/recipe/de-DE/r776048" --target mc
+
+# Monsieur Cuisine draft -> Thermomix/Cookidoo draft
+smart-recipe create "https://www.monsieur-cuisine.com/de/create-recipe?devices=mc-smart&recipe-id=10408588" --target tm
+
+# Cookidoo created recipe -> Monsieur Cuisine draft
+smart-recipe create "https://cookidoo.de/created-recipes/de-DE/01KSSGVJPJY3SQ8WXXQTKSFESF" --target mc
+```
+
+Source and target are separate. `--target` / `--device` chooses where the generated draft will be uploaded. The source is detected from the URL, or can be forced with `--source web`, `--source mc`, or `--source cookidoo`.
+
+Monsieur Cuisine and Cookidoo source URLs require the matching saved session cookie. In an interactive terminal, SmartRecipe prompts to log in and retries retrieval when the source session is missing or expired.
 
 ---
 
@@ -225,7 +273,7 @@ By default, SmartRecipe uploads the best image it finds on the source recipe pag
 To avoid reusing the website image, ask OpenAI to create a new original image:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --recreate-image
+smart-recipe create "https://example.com/recipe" --recreate-image
 ```
 
 The generated image is designed to look like a realistic home-cooked dish: appetizing, natural, and not like glossy studio food photography.
@@ -233,7 +281,7 @@ The generated image is designed to look like a realistic home-cooked dish: appet
 You can also let the image generator see the source page images as loose visual context:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --recreate-image-with-source-images
+smart-recipe create "https://example.com/recipe" --recreate-image-with-source-images
 ```
 
 This still asks for a new image. The source images are only used to understand the dish.
@@ -241,7 +289,7 @@ This still asks for a new image. The source images are only used to understand t
 Set image options per run:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" \
+smart-recipe create "https://example.com/recipe" \
   --recreate-image \
   --image-size 1536x1024 \
   --image-quality high
@@ -251,30 +299,78 @@ smart-recipe import-url "https://example.com/recipe" \
 
 ## Useful commands
 
+### Command overview
+
+| Command | Purpose |
+| --- | --- |
+| `create` / `import-url` | Retrieve a URL, generate a device workflow with OpenAI, and optionally upload a draft. |
+| `create-file` / `import-file` | Generate from a local text/markdown file. |
+| `create-stdin` / `import-stdin` | Generate from piped stdin. |
+| `retrieve` | Inspect a web page, MC recipe URL, or Cookidoo recipe URL before conversion. |
+| `doctor` | Check config, saved cookies, and live session health. |
+| `me` / `profile` | Print account/session profile details. |
+| `recipes` / `drafts` | List recipes visible to the current session. |
+| `recipe` / `get-recipe` | Fetch and pretty-print one source recipe by ID. |
+| `schema` | Print the target device JSON schema. |
+| `prompt` | Print model-facing prompt and schema hints. |
+| `catalog` | Show verified locale/catalog data. |
+
 ### Check what SmartRecipe extracts from a page
 
 ```bash
 smart-recipe retrieve "https://example.com/recipe"
 ```
 
-This prints the cleaned recipe text and selected image candidates.
+For web pages, this prints the cleaned recipe text and selected image candidates. For Monsieur Cuisine and Cookidoo URLs, it retrieves the source recipe through the authenticated API and pretty-prints it using the same terminal recipe view as `recipe` / `get-recipe`.
+
+To inspect the intermediate markdown sent to the LLM:
+
+```bash
+smart-recipe retrieve "https://cookidoo.de/recipes/recipe/de-DE/r776048" --markdown
+```
 
 ### Check your Monsieur Cuisine login
 
 ```bash
-smart-recipe me
+smart-recipe me --device mc
+smart-recipe me --device tm
+```
+
+For a broader check:
+
+```bash
+smart-recipe doctor --device mc
+smart-recipe doctor --device tm
 ```
 
 ### List recent draft recipes
 
 ```bash
-smart-recipe drafts
+smart-recipe recipes --device mc
+smart-recipe recipes --device tm
 ```
 
-### Print the generated recipe as JSON
+`drafts` remains as an alias for `recipes`.
+
+### Fetch a single recipe
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --dry-run --full-response --json
+smart-recipe recipe 10408588 --device mc
+smart-recipe recipe r776048 --device tm
+```
+
+`get-recipe` remains as an alias for `recipe`.
+
+To inspect the mapped internal input JSON:
+
+```bash
+smart-recipe recipe 10408588 --device mc --input
+```
+
+### Print generated workflow JSON
+
+```bash
+smart-recipe create "https://example.com/recipe" --dry-run --full-response --json
 ```
 
 ### Validate a recipe JSON file
@@ -307,9 +403,18 @@ smart-recipe catalog
 
 | Option                                | What it does                                                                                           |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `--yes`                               | Always upload without asking for confirmation (mirrors the old default behaviour).                     |
-| `--dry-run`                           | Generate and display the recipe without uploading it. Takes priority over `--yes`.                     |
+| `--always-upload`                     | Always upload without asking for confirmation (mirrors the old default behaviour).                     |
+| `--dry-run`                           | Generate and display the recipe without uploading it. Takes priority over `--always-upload`.           |
+| `--device <device>`                   | Target device: `mc` (Monsieur Cuisine) or `tm` (Thermomix).                                             |
+| `--target <device>`                   | Alias for `--device`, useful when the input URL is from another device.                                 |
+| `--source <source>`                   | Force source detection: `web`, `mc`, `cookidoo`, or `tm`.                                               |
+| `--source-cookie <cookie>`            | Cookie for authenticated source retrieval. Applies to the detected/forced source.                       |
+| `--mc-source-cookie <cookie>`         | Cookie for retrieving Monsieur Cuisine source recipes.                                                   |
+| `--tm-source-cookie <cookie>`         | Cookie for retrieving Cookidoo / Thermomix source recipes.                                               |
+| `--tm-version <version>`              | Thermomix device model version: `tm7`, `tm6`, or `tm5`.                                                |
+| `--experimental-tm-modes`             | Alias for `--extend-tm-modes`; allows modes that Cookidoo may show as unsupported in My Creations.      |
 | `--no-print-markdown`                 | Do not pretty-print the retrieved page markdown before generation.                                     |
+| `--markdown`                          | On `retrieve`, print the intermediate source markdown instead of the pretty recipe view.                |
 | `--full-response`                     | Print the extracted page summary, generated recipe, payload, image info, and upload response.          |
 | `--json`                              | Print machine-readable JSON (disables all interactive prompts).                                        |
 | `--log-level debug`                   | Show more detailed progress logs.                                                                      |
@@ -320,15 +425,15 @@ smart-recipe catalog
 | `--image-model <model>`               | Choose the OpenAI image model.                                                                         |
 | `--image-size <size>`                 | Choose generated image size.                                                                           |
 | `--image-quality <quality>`           | Choose image quality: `low`, `medium`, `high`, or `auto`.                                              |
-| `--cookie <cookie>`                   | Pass a Monsieur Cuisine / Lidl Plus cookie directly (skips the auth prompt).                           |
+| `--cookie <cookie>`                   | Pass a Monsieur Cuisine or Thermomix cookie directly (skips the auth prompt).                          |
 | `--env <path>`                        | Load a specific env file.                                                                              |
 
 ---
 
 ## Supported languages and locales
 
-SmartRecipe currently bundles verified Monsieur Cuisine catalog data for:
-
+### Monsieur Cuisine
+SmartRecipe bundles verified Monsieur Cuisine catalog data for:
 * Czech: `cs-CZ`
 * Polish: `pl-PL`
 * German: `de-DE`
@@ -336,41 +441,38 @@ SmartRecipe currently bundles verified Monsieur Cuisine catalog data for:
 * English: `en-US`
 * Italian: `it-IT`
 
-The default locale is:
-
+Default Monsieur Cuisine locale:
 ```bash
 MC_LOCALE=de-DE
 ```
 
-Planned locale coverage includes additional Monsieur Cuisine markets such as Spanish, Dutch, Portuguese, Hungarian, Greek, Slovak, Turkish, Romanian, Finnish, Croatian, Bulgarian, and Swedish.
+Planned Monsieur Cuisine locale coverage includes Spanish, Dutch, Portuguese, Hungarian, Greek, Slovak, Turkish, Romanian, Finnish, Croatian, Bulgarian, and Swedish.
+
+### Thermomix (Cookidoo)
+SmartRecipe supports Cookidoo locales based on domains:
+* German (Germany): `de-DE` (via `cookidoo.de`)
+* English (US/International): `en-US` (via `cookidoo.international`)
+* French (France): `fr-FR` (via `cookidoo.fr`)
+* Italian (Italy): `it-IT` (via `cookidoo.it`)
+* Polish (Poland): `pl-PL` (via `cookidoo.pl`)
+* Czech (Czechia): `cs-CZ` (via `cookidoo.cz`)
+
+Default Thermomix locale:
+```bash
+TM_LOCALE=de-DE
+```
 
 ---
 
 ## How SmartRecipe thinks about recipes
 
-SmartRecipe tries to create recipes that feel native to the Monsieur Cuisine Smart instead of simply pasting normal cooking instructions into a draft.
+SmartRecipe tries to create recipes that feel native to your smart cooker instead of simply pasting normal cooking instructions into a draft.
 
-It can use Smart modes such as:
-
-* manual cooking
-* scale
-* turbo
-* roast
-* solid dough kneading
-* soft dough kneading
-* liquid dough kneading
-* steam
-* sous-vide
-* slow cooking
-* egg cooking
-* precleaning
-* fermentation
-* rice cooking
-* food processor
-* puree
-* smoothie
-
-It also tries to respect practical appliance limits, such as jug capacity, dough limits, steaming requirements, reverse rotation for delicate ingredients, and when the pot should be clean, cold, or dry.
+It automatically maps standard instructions to device-native modes:
+* **Monsieur Cuisine Smart**: Supports custom modes like roast, slow cooking, liquid/solid/soft dough kneading, steam, sous-vide, turbo, precleaning, fermentation, rice cooking, food processor, puree, and smoothie.
+* **Thermomix TM7/TM6/TM5**: Adapts to Thermomix-specific guided modes. If targeting a TM5, it automatically clamps cooking speeds and prevents generating unsupported modes like browning/roast or sous-vide.
+* **Device Limits**: Respects mixing bowl capacity (2.2L max capacity for TM/MC), kneading weights (restricts kneading to 800g of flour), and temperature ranges (clamps browning temperatures to specific allowed integers like `[140, 145, 150, 155, 160]`), and handles reverse rotation automatically for delicate items.
+* **Clean Annotations**: Removes unnecessary manual mixing annotations to prevent crossed-out lines in the device UI.
 
 This helps, but it is not a safety guarantee. Treat the generated recipe like a smart draft from an assistant, not like a tested cookbook recipe.
 
@@ -385,7 +487,7 @@ This helps, but it is not a safety guarantee. Treat the generated recipe like a 
 npm install -g github:gerkensm/smart-recipe
 
 # 2. Run — SmartRecipe walks you through everything
-smart-recipe import-url "https://example.com/recipe"
+smart-recipe create "https://example.com/recipe"
 # → asks for your OpenAI API key (and offers to save it)
 # → generates and displays the recipe in the terminal
 # → asks if you want to upload
@@ -401,27 +503,30 @@ export OPENAI_API_KEY="sk-..."
 export MC_COOKIE="..."
 
 # Always upload without prompts
-smart-recipe import-url "https://example.com/recipe" --yes
+smart-recipe create "https://example.com/recipe" --always-upload
 
 # Generate only, print JSON
-smart-recipe import-url "https://example.com/recipe" --dry-run --json
+smart-recipe create "https://example.com/recipe" --dry-run --json
 ```
 
 ---
 
 ## Troubleshooting
 
-### `No Monsieur Cuisine cookie found`
+### `No Monsieur Cuisine cookie found` / `Cookidoo source ingestion requires a Thermomix/Cookidoo cookie`
 
 If you are running interactively, SmartRecipe will offer browser login or step-by-step cookie instructions automatically when you choose to upload.
 
 To pre-authenticate:
 
 ```bash
-smart-recipe login-browser --save
+smart-recipe login-browser --device mc --save
+smart-recipe login-browser --device tm --save
 ```
 
 Or pass a cookie manually with `--cookie`.
+
+For source retrieval, use `--mc-source-cookie`, `--tm-source-cookie`, or the generic `--source-cookie` when you do not want to use the saved session.
 
 ### The recipe looks wrong
 
@@ -438,7 +543,7 @@ Check whether the source page was extracted correctly. Some pages hide recipe da
 Run a dry run with the full response:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --dry-run --full-response
+smart-recipe create "https://example.com/recipe" --dry-run --full-response
 ```
 
 Review the generated JSON before upload. AI can misunderstand cooking order, ingredient quantities, or device constraints.
@@ -448,11 +553,11 @@ Review the generated JSON before upload. AI can misunderstand cooking order, ing
 Try one of these:
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --recreate-image
+smart-recipe create "https://example.com/recipe" --recreate-image
 ```
 
 ```bash
-smart-recipe import-url "https://example.com/recipe" --recreate-image-with-source-images
+smart-recipe create "https://example.com/recipe" --recreate-image-with-source-images
 ```
 
 If the source page has poor or unrelated images, recreating the image may work better than uploading the original.
@@ -481,10 +586,16 @@ Node.js must be `20.18` or newer.
 | `OPENAI_IMAGE_MODEL`      | `gpt-image-2` | Image generation model.                                   |
 | `OPENAI_IMAGE_SIZE`       |   `1024x1024` | Generated image size.                                     |
 | `OPENAI_IMAGE_QUALITY`    |      `medium` | Generated image quality.                                  |
+| `TARGET_DEVICE`           |          `mc` | Default target device: `mc` or `tm`.                      |
 | `MC_LOCALE`               |       `de-DE` | Monsieur Cuisine locale.                                  |
 | `MC_COOKIE`               |         empty | Optional saved Monsieur Cuisine cookie.                   |
 | `MC_LOGIN`                |         empty | Optional Lidl Plus email for browser login prefill.       |
 | `MC_PW`                   |         empty | Optional Lidl Plus password for browser login automation. |
+| `TM_VERSION`              |         `tm6` | Default Thermomix version: `tm7`, `tm6`, or `tm5`.        |
+| `TM_LOCALE`               |       `de-DE` | Thermomix locale.                                         |
+| `TM_COOKIE`               |         empty | Optional saved Thermomix cookie.                          |
+| `TM_LOGIN`                |         empty | Optional Cookidoo email for browser login prefill.        |
+| `TM_PW`                   |         empty | Optional Cookidoo password for browser login automation.  |
 
 ---
 
@@ -497,8 +608,10 @@ Main modules:
 * `smart-recipe/retriever`: fetch recipe pages, convert them to Markdown, and collect image candidates
 * `smart-recipe/llm`: OpenAI recipe and image generation
 * `smart-recipe/recipes`: typed recipe schema, normalization, validation, Smart mode helpers, payload creation, and terminal pretty-printer
-* `smart-recipe/catalogs`: locale-specific Monsieur Cuisine category and complexity IDs
+* `smart-recipe/sources`: source detection and retrieval for web pages, Monsieur Cuisine recipe URLs, Cookidoo official recipes, and Cookidoo created recipes
+* `smart-recipe/devices`: the unified `createDeviceApi` facade plus lower-level adapters (`MonsieurCuisineAdapter` and `ThermomixAdapter`)
 * `smart-recipe/mc`: Monsieur Cuisine Smart client, login cookie handling, draft upload, and image upload
+* `smart-recipe/tm`: Thermomix (Cookidoo) API client, authentication, cookie proxy, and draft upload
 * `smart-recipe/pipeline`: `generateSmartRecipe` and `uploadSmartRecipe` phase functions, plus the legacy combined `importRecipe` wrapper
 
 Run checks:
@@ -515,7 +628,7 @@ Inspect package contents before publishing:
 npm pack --dry-run
 ```
 
-More implementation notes live in [`docs/technical.md`](docs/technical.md).
+More implementation notes live in [`docs/technical.md`](docs/technical.md). Public library examples, including the unified device API, live in [`docs/api.md`](docs/api.md).
 
 ---
 
@@ -526,6 +639,16 @@ SmartRecipe is an independent open-source project. It is not affiliated with, en
 Recipe websites, images, and texts may be protected by copyright or other rights. Make sure you have the right to use any imported or generated material for your intended purpose.
 
 Generated recipes can be wrong. You are responsible for reviewing drafts before cooking or sharing them.
+
+---
+
+## Credits & Inspiration
+
+The Thermomix (Cookidoo) integration in SmartRecipe is inspired by and credits the following community projects:
+* **TypeScript**: [@recode-software/cookidoo-api](https://github.com/recode-software/cookidoo-api) by Recode Software.
+* **Python**: [cookidoo-api](https://github.com/miaucl/cookidoo-api) by Cyrill Raccaud (`miaucl`).
+
+These projects provided invaluable references for Cookidoo API routes, authentication proxy flows, and schema structures.
 
 ---
 
