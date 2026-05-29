@@ -118,6 +118,13 @@ export class MonsieurCuisineSmartClient {
     });
   }
 
+  async getRecipe(recipeId: string | number): Promise<unknown> {
+    return this.proxy({
+      endpoint: `api/v3/auth/user/recipes/${recipeId}`,
+      referer: this.recipeUrl(Number(recipeId))
+    });
+  }
+
   async createRecipe(payload: SmartRecipePayload, { locale = payload.languageLocale } = {}): Promise<any> {
     assertSmartRecipePayload(payload);
     const result = await this.proxy({

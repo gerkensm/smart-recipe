@@ -21,6 +21,7 @@ export interface DeviceAdapter<TInput = any, TPayload = any> {
 
   getCurrentUser(cookie: string): Promise<any>;
   listDrafts(options: { cookie: string; page?: number; size?: number }): Promise<any>;
+  getRecipe(options: { cookie: string; id: string; public?: boolean }): Promise<any>;
 
   createPayload(input: TInput): TPayload;
 

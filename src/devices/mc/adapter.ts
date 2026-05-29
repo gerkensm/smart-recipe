@@ -65,6 +65,12 @@ export class MonsieurCuisineAdapter implements DeviceAdapter {
     return client.listDrafts({ page: options.page, size: options.size });
   }
 
+  async getRecipe(options: { cookie: string; id: string; public?: boolean }) {
+    const client = new MonsieurCuisineSmartClient({ cookie: options.cookie });
+    const res = await client.getRecipe(options.id) as any;
+    return res?.data?.recipe ?? res;
+  }
+
   createPayload(input: any) {
     return createSmartRecipePayload({ ...input, thumbnailMediaId: null, detailsImageMediaId: null });
   }

@@ -13,13 +13,18 @@ const sampleInput: CookidooRecipeInput = {
   totalTime: 30,
   servingSize: 4,
   servingUnitText: "portions",
-  ingredients: ["100g flour", "50g sugar"],
+  ingredients: [
+    { id: "mehl", text: "100g flour" },
+    { id: "zucker", text: "50g sugar" }
+  ],
   steps: [
     {
       text: "Put flour and sugar into mixing bowl.",
+      ingredientAnnotations: [],
       modeAnnotations: []
     }
   ],
+  hints: "",
   settings: {
     locale: "de-DE"
   }
@@ -50,7 +55,10 @@ describe("ThermomixAdapter", () => {
       const unnormalized: CookidooRecipeInput = {
         ...sampleInput,
         title: "  Test Recipe   ",
-        ingredients: ["  100g flour ", " 50g sugar"],
+        ingredients: [
+          { id: "  mehl  ", text: "  100g flour " },
+          { id: "zucker", text: " 50g sugar" }
+        ] as any,
         steps: [
           {
             text: " Put flour and sugar.  ",
@@ -65,7 +73,10 @@ describe("ThermomixAdapter", () => {
       };
       const normalized = adapter.normalizeInput(unnormalized);
       expect(normalized.title).toBe("Test Recipe");
-      expect(normalized.ingredients).toEqual(["100g flour", "50g sugar"]);
+      expect(normalized.ingredients).toEqual([
+        { id: "mehl", text: "100g flour" },
+        { id: "zucker", text: "50g sugar" }
+      ]);
       expect(normalized.steps[0].text).toBe("Put flour and sugar.");
       expect(normalized.steps[0].modeAnnotations?.[0].matchedSubstring).toBe("flour and sugar");
     });
@@ -107,22 +118,22 @@ describe("ThermomixAdapter", () => {
       expect(step.annotations![0].data.time).toBe(120);
     });
 
-    it("drops annotations with non-existent matched substrings gracefully", () => {
-      const inputWithInvalidMode: CookidooRecipeInput = {
+    it("drops ingredient annotations with non-existent ingredient ID gracefully", () => {
+      const inputWithInvalidIngredient: CookidooRecipeInput = {
         ...sampleInput,
         steps: [
           {
-            text: "Stir the mixture gently.",
-            modeAnnotations: [
+            text: "Add flour.",
+            ingredientAnnotations: [
               {
-                matchedSubstring: "non-existent text",
-                mode: { type: "dough", time: 60 }
+                matchedSubstring: "flour",
+                ingredientId: "non-existent-id"
               }
             ]
           }
         ]
       };
-      const payload = adapter.createPayload(inputWithInvalidMode);
+      const payload = adapter.createPayload(inputWithInvalidIngredient);
       const step = payload.instructions[0];
       expect(step.annotations).toBeUndefined();
     });
@@ -180,6 +191,56 @@ describe("ThermomixAdapter", () => {
       expect((annotation.data as any).temperature).toBeUndefined();
       expect(annotation.data.time).toBe(900);
       expect(annotation.data.speed).toBe("1");
+      expect((annotation.data as any).accessory).toBe("Varoma");
+    });
+
+    it("maps Gareinsatz and both steaming accessories to SimmeringBasket and VaromaAndSimmeringBasket", () => {
+      const inputGareinsatz: CookidooRecipeInput = {
+        ...sampleInput,
+        steps: [
+          {
+            text: "Steam in basket for 10 min/Gareinsatz.",
+            modeAnnotations: [
+              {
+                matchedSubstring: "Steam in basket for 10 min/Gareinsatz",
+                mode: {
+                  type: "steaming",
+                  time: 600,
+                  speed: "1",
+                  accessory: "Gareinsatz" as any
+                }
+              }
+            ]
+          }
+        ]
+      };
+      const inputBoth: CookidooRecipeInput = {
+        ...sampleInput,
+        steps: [
+          {
+            text: "Steam in both for 10 min/both.",
+            modeAnnotations: [
+              {
+                matchedSubstring: "Steam in both for 10 min/both",
+                mode: {
+                  type: "steaming",
+                  time: 600,
+                  speed: "1",
+                  accessory: "both" as any
+                }
+              }
+            ]
+          }
+        ]
+      };
+
+      const payloadGareinsatz = adapter.createPayload(inputGareinsatz);
+      const annotationGareinsatz = payloadGareinsatz.instructions[0].annotations![0];
+      expect((annotationGareinsatz.data as any).accessory).toBe("SimmeringBasket");
+
+      const payloadBoth = adapter.createPayload(inputBoth);
+      const annotationBoth = payloadBoth.instructions[0].annotations![0];
+      expect((annotationBoth.data as any).accessory).toBe("VaromaAndSimmeringBasket");
     });
 
     it("enforces browning mode constraints: clamps temperature to allowed list", () => {
@@ -261,6 +322,75 @@ describe("ThermomixAdapter", () => {
       process.env.TM_VERSION = "tm5";
       const prompt = adapter.getPromptInstructions("de-DE");
       expect(prompt).toContain("Target: Thermomix (TM5)");
+    });
+  });
+
+  describe("Draft listing", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+      delete process.env.TM_LOCALE;
+    });
+
+    it("maps Cookidoo created-recipes items responses", async () => {
+      const mockRequest = vi.spyOn(CookidooClient.prototype, "request");
+      mockRequest.mockResolvedValueOnce({
+        meta: {
+          recipeLimit: 150,
+          recipeLimitThreshold: 5
+        },
+        items: [
+          {
+            recipeId: "01K2CTJ9Y1BABRG5MXK44CFZS4",
+            modifiedAt: "2026-05-29T10:00:00.000Z",
+            status: "ACTIVE",
+            workStatus: "PRIVATE",
+            recipeContent: {
+              name: "Vongole alla marinara",
+              tools: ["TM7", "TM6", "TM5"]
+            }
+          }
+        ]
+      });
+
+      const result = await adapter.listDrafts({
+        cookie: "_oauth2_proxy=foo; v-authenticated=bar",
+        size: 20
+      });
+
+      expect(mockRequest).toHaveBeenCalledWith({
+        method: "GET",
+        path: "/created-recipes/de-DE"
+      });
+      expect(result.data.total).toBe(1);
+      expect(result.data.recipes).toEqual([
+        {
+          id: "01K2CTJ9Y1BABRG5MXK44CFZS4",
+          title: "Vongole alla marinara",
+          status: "PRIVATE",
+          updatedAt: "2026-05-29T10:00:00.000Z",
+          deviceTypes: ["TM7", "TM6", "TM5"],
+          ingredientCount: undefined,
+          stepCount: undefined,
+          hasImage: false,
+          hasHints: false
+        }
+      ]);
+    });
+
+    it("uses TM_LOCALE when listing drafts", async () => {
+      process.env.TM_LOCALE = "en-US";
+      const mockRequest = vi.spyOn(CookidooClient.prototype, "request");
+      mockRequest.mockResolvedValueOnce([]);
+
+      await adapter.listDrafts({
+        cookie: "_oauth2_proxy=foo; v-authenticated=bar",
+        size: 20
+      });
+
+      expect(mockRequest).toHaveBeenCalledWith({
+        method: "GET",
+        path: "/created-recipes/en-US"
+      });
     });
   });
 
@@ -525,4 +655,3 @@ describe("ThermomixAdapter", () => {
     });
   });
 });
-

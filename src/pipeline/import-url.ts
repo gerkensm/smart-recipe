@@ -4,6 +4,9 @@ import { OpenAIRecipeGenerator } from "../llm/openai-generator.js";
 import type { AuthProvider } from "../mc/auth.js";
 import { RecipePageRetriever } from "../retriever/retriever.js";
 import type { RetrievedRecipePage } from "../retriever/types.js";
+import { detectRecipeSource } from "../sources/detect.js";
+import { fetchRecipeSourceAsPage } from "../sources/fetchers.js";
+import type { RecipeSource } from "../sources/types.js";
 import type { ReasoningEffort } from "../llm/types.js";
 import type { SupportedLocale } from "../catalogs/types.js";
 import type { PromptModeType } from "../recipes/types.js";
@@ -13,6 +16,12 @@ import { MonsieurCuisineAdapter } from "../devices/mc/adapter.js";
 
 export interface ImportRecipeFromUrlOptions {
   url: string;
+  source?: RecipeSource;
+  sourceType?: "web" | "mc" | "cookidoo" | "tm";
+  sourceCookies?: {
+    mc?: string;
+    tm?: string;
+  };
   dryRun?: boolean;
   fullResponse?: boolean;
   locale?: SupportedLocale;
@@ -146,7 +155,14 @@ export async function importRecipeFromUrl(options: ImportRecipeFromUrlOptions): 
   const locale = options.locale ?? "de-DE";
 
   logger.info({ url: options.url }, "retrieving recipe page");
-  const page = await new RecipePageRetriever().retrieve(options.url);
+  const source = options.source ?? detectRecipeSource(options.url, { source: options.sourceType });
+  const page = source.type === "web"
+    ? await new RecipePageRetriever().retrieve(source.url)
+    : await fetchRecipeSourceAsPage(source, {
+        cookies: options.sourceCookies,
+        locale,
+        includeImageBytes: true,
+      });
 
   return importRecipe({
     ...options,
@@ -192,4 +208,3 @@ export async function importRecipe(options: ImportRecipeOptions): Promise<Import
 
   return { page, recipeInput, payload };
 }
-

@@ -8,6 +8,7 @@ import { buildCookidooRecipeInstructions } from "./prompts.js";
 import { browserLoginForCookidoo } from "./browser-login.js";
 import { CookidooClient } from "./client.js";
 import { RetrievedRecipeImageProvider } from "../../pipeline/images.js";
+import { extractJsonLd, findRecipeObjects } from "../../retriever/json-ld.js";
 
 
 const ansi = {
@@ -53,10 +54,17 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
     return {
       ...input,
       title: (input.title ?? "").trim(),
-      ingredients: (input.ingredients ?? []).map((i: string) => i.trim()),
+      ingredients: (input.ingredients ?? []).map((i: any) => ({
+        id: (i.id ?? "").trim(),
+        text: (i.text ?? "").trim(),
+      })),
       steps: (input.steps ?? []).map((step: any) => ({
-        ...step,
         text: (step.text ?? "").trim(),
+        ingredientAnnotations: (step.ingredientAnnotations ?? []).map((ann: any) => ({
+          ...ann,
+          matchedSubstring: (ann.matchedSubstring ?? "").trim(),
+          ingredientId: (ann.ingredientId ?? "").trim(),
+        })),
         modeAnnotations: (step.modeAnnotations ?? []).map((ann: any) => ({
           ...ann,
           matchedSubstring: (ann.matchedSubstring ?? "").trim(),
@@ -84,17 +92,94 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
     parts.push(`  ${ansi.bold}${ansi.underline}Ingredients:${ansi.reset}`);
     parts.push("");
     for (const ing of input.ingredients) {
-      parts.push(`    • ${ing}`);
+      parts.push(`    • ${ing.text}`);
     }
     parts.push("");
 
     parts.push(`  ${ansi.bold}${ansi.underline}Steps:${ansi.reset}`);
     parts.push("");
     input.steps.forEach((step, idx) => {
-      parts.push(`    ${ansi.bold}${ansi.brightGreen}${idx + 1}.${ansi.reset} ${step.text}`);
-      if (step.modeAnnotations && step.modeAnnotations.length > 0) {
-        step.modeAnnotations.forEach((ann) => {
-          const m = ann.mode;
+      interface ResolvedAnnotation {
+        type: "INGREDIENT" | "MODE";
+        offset: number;
+        length: number;
+        matchedSubstring: string;
+        data: any;
+      }
+
+      const searchOffsets: Record<string, number> = {};
+      const resolved: ResolvedAnnotation[] = [];
+
+      if (step.ingredientAnnotations) {
+        for (const ann of step.ingredientAnnotations) {
+          const term = ann.matchedSubstring;
+          const startFrom = searchOffsets[term] ?? 0;
+          const offset = step.text.indexOf(term, startFrom);
+          if (offset !== -1) {
+            const ingObj = input.ingredients.find(i => i.id === ann.ingredientId);
+            resolved.push({
+              type: "INGREDIENT",
+              offset,
+              length: term.length,
+              matchedSubstring: term,
+              data: ingObj ? ingObj.text : "",
+            });
+            searchOffsets[term] = offset + term.length;
+          }
+        }
+      }
+
+      if (step.modeAnnotations) {
+        for (const ann of step.modeAnnotations) {
+          const term = ann.matchedSubstring;
+          const startFrom = searchOffsets[term] ?? 0;
+          const offset = step.text.indexOf(term, startFrom);
+          if (offset !== -1) {
+            resolved.push({
+              type: "MODE",
+              offset,
+              length: term.length,
+              matchedSubstring: term,
+              data: ann.mode,
+            });
+            searchOffsets[term] = offset + term.length;
+          }
+        }
+      }
+
+      resolved.sort((a, b) => a.offset - b.offset);
+
+      let inlineText = "";
+      let lastIndex = 0;
+
+      for (const ann of resolved) {
+        if (ann.offset > lastIndex) {
+          inlineText += step.text.slice(lastIndex, ann.offset);
+        }
+
+        const annText = step.text.slice(ann.offset, ann.offset + ann.length);
+        if (ann.type === "INGREDIENT") {
+          inlineText += `${ansi.bold}${annText}${ansi.reset}`;
+          if (ann.data) {
+            inlineText += `${ansi.gray} ["${ann.data}"]${ansi.reset}`;
+          }
+        } else if (ann.type === "MODE") {
+          inlineText += `${ansi.brightYellow}${ansi.bold}${annText}${ansi.reset}`;
+        }
+
+        lastIndex = ann.offset + ann.length;
+      }
+
+      if (lastIndex < step.text.length) {
+        inlineText += step.text.slice(lastIndex);
+      }
+
+      parts.push(`    ${ansi.bold}${ansi.brightGreen}${idx + 1}.${ansi.reset} ${inlineText}`);
+
+      // Print mode details on a separate line below the step
+      for (const ann of resolved) {
+        if (ann.type === "MODE") {
+          const m = ann.data;
           const params: string[] = [];
           if (m.type === "dough") {
             params.push(`${m.time}s`);
@@ -117,10 +202,10 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
             params.push(`${m.temperature}°C`);
             if (m.power) params.push(m.power);
           }
-
           parts.push(`      ${ansi.bold}${ansi.brightYellow}[Mode: ${m.type} | "${ann.matchedSubstring}"${params.length > 0 ? " | " + params.join(", ") : ""}]${ansi.reset}`);
-        });
+        }
       }
+
     });
     parts.push("");
 
@@ -160,25 +245,59 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
   }
 
   async listDrafts(options: { cookie: string; page?: number; size?: number }) {
-    const client = new CookidooClient({ cookie: options.cookie, locale: "de-DE" });
+    const locale = (process.env.TM_LOCALE ?? "de-DE") as string;
+    const client = new CookidooClient({ cookie: options.cookie, locale });
     const res = await client.request<any>({
       method: "GET",
       path: `/created-recipes/${client.language}`,
     });
-    const recipes = Array.isArray(res) ? res : res?.data ?? [];
+    const candidateRecipes = Array.isArray(res) ? res : res?.items ?? res?.data ?? [];
+    const allRecipes = Array.isArray(candidateRecipes) ? candidateRecipes : [];
+    const size = options.size && options.size > 0 ? options.size : allRecipes.length;
+    const page = options.page && options.page > 0 ? options.page : 1;
+    const start = (page - 1) * size;
+    const recipes = allRecipes.slice(start, start + size);
     return {
       data: {
         recipes: recipes.map((recipe: any) => ({
           id: recipe.recipeId,
           title: recipe.recipeContent?.name ?? recipe.name ?? "",
-          status: recipe.status ?? "ACTIVE",
+          status: recipe.workStatus ?? recipe.status ?? "ACTIVE",
           updatedAt: recipe.modifiedAt ?? recipe.createdAt,
-          deviceTypes: ["Thermomix"],
+          deviceTypes: recipe.recipeContent?.tools ?? recipe.recipeContent?.tool ?? ["Thermomix"],
+          ingredientCount: recipe.recipeContent?.ingredients?.length ?? recipe.recipeContent?.recipeIngredient?.length,
+          stepCount: recipe.recipeContent?.instructions?.length ?? recipe.recipeContent?.recipeInstructions?.length,
+          hasImage: Boolean(recipe.recipeContent?.image || recipe.recipeContent?.descriptiveAssets?.length),
+          hasHints: Boolean(recipe.recipeContent?.hints),
         })),
-        total: recipes.length,
-        totalPage: 1,
+        total: allRecipes.length,
+        totalPage: size > 0 ? Math.max(1, Math.ceil(allRecipes.length / size)) : 1,
       },
     };
+  }
+
+  async getRecipe(options: { cookie: string; id: string; public?: boolean }) {
+    const locale = (process.env.TM_LOCALE ?? "de-DE") as string;
+    const client = new CookidooClient({ cookie: options.cookie, locale });
+    
+    const isOfficial = /^r\d+$/.test(options.id);
+    const path = isOfficial
+      ? `/recipes/recipe/${client.language}/${encodeURIComponent(options.id)}`
+      : options.public
+        ? `/created-recipes/public/recipes/${client.language}/${encodeURIComponent(options.id)}`
+        : `/created-recipes/${client.language}/${encodeURIComponent(options.id)}`;
+
+    const result = await client.request<any>({ method: "GET", path });
+    
+    if (isOfficial && typeof result === "string") {
+      const jsonLd = extractJsonLd(result);
+      const recipes = findRecipeObjects(jsonLd);
+      if (recipes.length > 0) {
+        return recipes[0];
+      }
+    }
+    
+    return result;
   }
 
   createPayload(input: CookidooRecipeInput) {

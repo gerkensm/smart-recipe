@@ -7,9 +7,12 @@ export default defineConfig({
     "src/locales/index.ts",
     "src/llm/index.ts",
     "src/mc/index.ts",
+    "src/devices/index.ts",
+    "src/devices/tm/index.ts",
     "src/pipeline/index.ts",
     "src/recipes/index.ts",
     "src/retriever/index.ts",
+    "src/sources/index.ts",
     "src/cli/main.ts"
   ],
   format: ["esm"],

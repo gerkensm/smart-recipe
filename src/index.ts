@@ -8,3 +8,4 @@ export * from "./mc/index.js";
 export * from "./pipeline/index.js";
 export * from "./recipes/index.js";
 export * from "./retriever/index.js";
+export * from "./sources/index.js";

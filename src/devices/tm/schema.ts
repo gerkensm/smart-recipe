@@ -133,24 +133,36 @@ export const CookidooStepModeSchema = Type.Union([
   }, { additionalProperties: false }),
 ], { description: "TM-specific guided modes." });
 
-export const CookidooModeAnnotationSchema = Type.Object({
-  matchedSubstring: Type.String({
+export const CookidooIngredientSchema = Type.Object({
+  id: Type.String({
     minLength: 1,
-    description: "The exact substring inside the step text that refers to this mode. Example: 'steam 20 min/Varoma/speed 1'. MUST be an exact match.",
+    description: "A short, unique string identifier (e.g. 'linse', 'curry') for referencing this ingredient in steps.",
   }),
-  mode: CookidooStepModeSchema,
+  text: Type.String({
+    minLength: 1,
+    description: "The full ingredient definition text (e.g. '150 g rote Linsen').",
+  }),
 }, { additionalProperties: false });
 
 export const CookidooStepSchema = Type.Object({
   text: Type.String({
     minLength: 1,
-    maxLength: 1000,
-    description: "Step instruction text. Use clear, continuous phrasing. Embedded mode instructions must match matchedSubstring exactly.",
+    description: "The full step instruction text. Keep it clean and natural.",
   }),
-  modeAnnotations: Type.Optional(Type.Array(CookidooModeAnnotationSchema, {
-    description: "Mode annotations parsed from substrings inside the step text.",
-  })),
+  ingredientAnnotations: Type.Optional(Type.Array(
+    Type.Object({
+      matchedSubstring: Type.String({ description: "The exact substring in the step text that represents the ingredient." }),
+      ingredientId: Type.String({ description: "The string id of the ingredient." }),
+    }, { additionalProperties: false })
+  )),
+  modeAnnotations: Type.Optional(Type.Array(
+    Type.Object({
+      matchedSubstring: Type.String({ description: "The exact substring in the step text that represents the guided mode settings." }),
+      mode: CookidooStepModeSchema,
+    }, { additionalProperties: false })
+  )),
 }, { additionalProperties: false });
+
 
 export const CookidooRecipeInputSchema = Type.Object({
   title: Type.String({
@@ -176,9 +188,9 @@ export const CookidooRecipeInputSchema = Type.Object({
     maxLength: 40,
     description: "Serving unit (e.g. portion, pieces, servings).",
   }),
-  ingredients: Type.Array(Type.String(), {
+  ingredients: Type.Array(CookidooIngredientSchema, {
     minItems: 1,
-    description: "Flat list of ingredient texts.",
+    description: "Flat list of ingredient objects.",
   }),
   steps: Type.Array(CookidooStepSchema, {
     minItems: 1,
@@ -197,3 +209,4 @@ export const CookidooRecipeInputSchema = Type.Object({
 });
 
 export type CookidooRecipeInput = Static<typeof CookidooRecipeInputSchema>;
+
