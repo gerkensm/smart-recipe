@@ -51,6 +51,7 @@ function select<T>(options: Parameters<typeof inquirerSelect<T>>[0]) {
 }
 import { loadDotEnv, upsertDotEnvValue, getTargetDevice, getTmVersion, getTmLocale, getTmCookie, mcHasFoodProcessor } from "../config/env.js";
 import { categoryPromptText, plannedLocales, supportedLocales } from "../catalogs/index.js";
+import type { SupportedLocale } from "../catalogs/types.js";
 import { buildRecipeInstructions } from "../llm/prompts.js";
 import { BrowserCookieAuthProvider, CookieAuthProvider } from "../mc/auth.js";
 import { browserLoginForMonsieurCuisine } from "../mc/browser-login.js";
@@ -75,8 +76,14 @@ import type { ReasoningEffort } from "../llm/types.js";
 import { OpenAIRecipeImageGenerator } from "../llm/openai-image-generator.js";
 import { NullImageProvider } from "../pipeline/images.js";
 import {
-  mapOfficialCookidooToInput as mapOfficialCookidooToInputCore,
-  mapCustomCookidooToInput as mapCustomCookidooToInputCore,
+  mapOfficialCookidooToInput,
+  mapCustomCookidooToInput,
+} from "./cookidoo-mappers.js";
+export {
+  cleanHtmlText,
+  parseIsoDuration,
+  mapOfficialCookidooToInput,
+  mapCustomCookidooToInput,
 } from "./cookidoo-mappers.js";
 import { formatDoctorForTerminal, formatRecipesForTerminal } from "./formatters.js";
 import { marked } from "marked";
@@ -109,6 +116,9 @@ const optionCategories: Record<string, string> = {
   "--full-response": "General / Import Workflow Options",
   "--no-print-markdown": "General / Import Workflow Options",
   "--device": "Device & Target Settings",
+  "--locale": "Device & Target Settings",
+  "--language": "Device & Target Settings",
+  "--source-locale": "Device & Target Settings",
   "--tm-version": "Device & Target Settings",
   "--mc-food-processor": "Device & Target Settings",
   "--exclude-modes": "Device & Target Settings",
@@ -264,6 +274,9 @@ function addImportOptions(cmd: Command): Command {
     .option("--cookie <cookie>", "Browser Cookie header")
     .option("--target <device>", "Alias for --device; target device: 'mc' or 'tm'")
     .option("--source <source>", "Source type hint: 'web', 'mc', 'cookidoo', or 'tm'")
+    .option("--locale <locale>", `Target recipe locale/language (${supportedLocales.join(", ")}; two-letter aliases like de/en/fr are accepted)`)
+    .option("--language <locale>", "Alias for --locale")
+    .option("--source-locale <locale>", "Locale used for authenticated source APIs when the source URL/ID does not include one")
     .option("--source-cookie <cookie>", "Cookie header for authenticated source recipe ingestion")
     .option("--mc-source-cookie <cookie>", "Monsieur Cuisine source Cookie header")
     .option("--tm-source-cookie <cookie>", "Cookidoo/Thermomix source Cookie header")
@@ -293,7 +306,7 @@ program.commands.at(-1)!.action(async (url, options) => {
     ? await retrieveRecipePage(source.url, { includeImageBytes: true })
     : await fetchRecipeSourceAsPage(source, {
         cookies: sourceCookiesFromOptions(options, source),
-        locale: process.env.TM_LOCALE ?? "de-DE",
+        locale: sourceLocaleFromOptions(options, source),
         includeImageBytes: true,
       });
   if (!program.optsWithGlobals().json && options.printMarkdown !== false) {
@@ -504,6 +517,9 @@ async function runImport(
   }
 
   const adapter = getDeviceAdapter(targetDevice);
+  const targetLocaleResult = await getOrPromptTargetLocale(targetDevice, options, isInteractive);
+  const targetLocale = targetLocaleResult.locale;
+  wasPrompted = wasPrompted || targetLocaleResult.prompted;
 
   // ── Step 1: Ensure we have an OpenAI API key ──────────────────────────────
   if (!process.env.OPENAI_API_KEY) {
@@ -571,6 +587,7 @@ async function runImport(
 
   const generated: GenerateSmartRecipeResult = await generateSmartRecipe({
     page,
+    locale: targetLocale,
     openAIModel: options.model,
     reasoningEffort: options.reasoning as ReasoningEffort,
     excludeModes: excludeModes.length > 0 ? (excludeModes as any) : undefined,
@@ -677,6 +694,7 @@ async function runImport(
     uploadResult = await uploadSmartRecipe({
       page: generated.page,
       recipeInput: generated.recipeInput,
+      locale: targetLocale,
       cookie: activeCookie,
       authProvider,
       imageProvider,
@@ -715,6 +733,7 @@ async function runImport(
       uploadResult = await uploadSmartRecipe({
         page: generated.page,
         recipeInput: generated.recipeInput,
+        locale: targetLocale,
         cookie: newCookie,
         authProvider,
         imageProvider,
@@ -1005,10 +1024,102 @@ function sourceCookiesFromOptions(options: any, detectedSource?: RecipeSource): 
   };
 }
 
+function sourceLocaleFromOptions(options: any, detectedSource: RecipeSource): string {
+  if (options.sourceLocale) return normalizeSupportedLocale(options.sourceLocale) ?? options.sourceLocale;
+  if ("locale" in detectedSource && detectedSource.locale) return detectedSource.locale;
+  const sourceDevice = sourceDeviceForType(detectedSource.type);
+  if (sourceDevice === "tm") return normalizeSupportedLocale(getTmLocale("de-DE")) ?? getTmLocale("de-DE");
+  if (sourceDevice === "mc") return normalizeSupportedLocale(process.env.MC_LOCALE) ?? process.env.MC_LOCALE ?? "de-DE";
+  return normalizeSupportedLocale(options.locale ?? options.language) ?? options.locale ?? options.language ?? "de-DE";
+}
+
 function sourceDeviceForType(sourceType: RecipeSource["type"]): "mc" | "tm" | null {
   if (sourceType === "mc") return "mc";
   if (sourceType === "cookidoo-official" || sourceType === "cookidoo-created") return "tm";
   return null;
+}
+
+const localeChoiceLabels: Record<SupportedLocale, string> = {
+  "de-DE": "German (Germany)",
+  "en-US": "English (US)",
+  "fr-FR": "French (France)",
+  "it-IT": "Italian (Italy)",
+  "pl-PL": "Polish (Poland)",
+  "cs-CZ": "Czech (Czechia)",
+};
+
+const localeAliases: Record<string, SupportedLocale> = {
+  cs: "cs-CZ",
+  "cs-cz": "cs-CZ",
+  cz: "cs-CZ",
+  de: "de-DE",
+  "de-de": "de-DE",
+  en: "en-US",
+  "en-us": "en-US",
+  fr: "fr-FR",
+  "fr-fr": "fr-FR",
+  it: "it-IT",
+  "it-it": "it-IT",
+  pl: "pl-PL",
+  "pl-pl": "pl-PL",
+};
+
+function localeEnvKeyForDevice(device: "mc" | "tm"): "MC_LOCALE" | "TM_LOCALE" {
+  return device === "tm" ? "TM_LOCALE" : "MC_LOCALE";
+}
+
+function normalizeSupportedLocale(value: unknown): SupportedLocale | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  const alias = localeAliases[normalized.toLowerCase()];
+  if (alias) return alias;
+  return (supportedLocales as readonly string[]).includes(normalized)
+    ? normalized as SupportedLocale
+    : undefined;
+}
+
+async function getOrPromptTargetLocale(
+  targetDevice: "mc" | "tm",
+  options: any,
+  isInteractive: boolean
+): Promise<{ locale: SupportedLocale; prompted: boolean }> {
+  const localeKey = localeEnvKeyForDevice(targetDevice);
+  const rawLocale = options.locale ?? options.language ?? process.env[localeKey];
+  const locale = normalizeSupportedLocale(rawLocale);
+  if (rawLocale && !locale) {
+    throw new Error(`Unsupported locale ${rawLocale}. Supported locales: ${supportedLocales.join(", ")}`);
+  }
+  if (locale) {
+    process.env[localeKey] = locale;
+    return { locale, prompted: false };
+  }
+
+  if (!isInteractive) {
+    process.env[localeKey] = "de-DE";
+    return { locale: "de-DE", prompted: false };
+  }
+
+  const selectedLocale = await select<SupportedLocale>({
+    message: `Which language/locale should the generated ${targetDevice === "tm" ? "Thermomix" : "Monsieur Cuisine"} recipe use?`,
+    choices: supportedLocales.map((value) => ({
+      name: `${localeChoiceLabels[value]} (${value})`,
+      value,
+    })),
+    default: "de-DE",
+  });
+
+  const saveSettings = process.env.SAVE_SETTINGS !== "false" && await confirm({
+    message: `Save this ${targetDevice === "tm" ? "Thermomix" : "Monsieur Cuisine"} locale to ~/.smart-recipe?`,
+    default: true,
+  });
+  if (saveSettings) {
+    upsertDotEnvValue(GLOBAL_ENV_PATH, localeKey, selectedLocale);
+    console.log(`✓ Saved ${localeKey} to ${GLOBAL_ENV_PATH}\n`);
+  } else {
+    process.env.SAVE_SETTINGS = "false";
+  }
+  process.env[localeKey] = selectedLocale;
+  return { locale: selectedLocale, prompted: true };
 }
 
 function isSourceAuthError(source: RecipeSource, error: any): boolean {
@@ -1170,8 +1281,8 @@ async function listRecipesCommand(options: any) {
 function mapRecipeToInput(device: "mc" | "tm", recipe: any): any {
   if (device === "tm") {
     return recipe && recipe["@type"] === "Recipe"
-      ? mapOfficialCookidooToInputCore(recipe)
-      : mapCustomCookidooToInputCore(recipe);
+      ? mapOfficialCookidooToInput(recipe)
+      : mapCustomCookidooToInput(recipe);
   }
   return mapMonsieurCuisineToInput(recipe);
 }
@@ -1239,6 +1350,7 @@ program
   .option("--source-cookie <cookie>", "Cookie header for authenticated source recipe ingestion")
   .option("--mc-source-cookie <cookie>", "Monsieur Cuisine source Cookie header")
   .option("--tm-source-cookie <cookie>", "Cookidoo/Thermomix source Cookie header")
+  .option("--source-locale <locale>", "Locale used for authenticated source APIs when the source URL/ID does not include one")
   .option("--markdown", "Print the retrieved markdown instead of the formatted source recipe view")
   .option("--no-images", "Do not download image bytes")
   .action(async (url, options) => {
@@ -1247,7 +1359,7 @@ program
     const isInteractive = process.stdin.isTTY && process.stdout.isTTY;
     const sourceOptions = {
       cookies: sourceCookiesFromOptions(options, source),
-      locale: process.env.TM_LOCALE ?? "de-DE",
+      locale: sourceLocaleFromOptions(options, source),
       includeImageBytes: options.images,
     };
     let result: { page: RetrievedRecipePage; raw: unknown };
@@ -1505,6 +1617,10 @@ function printSuggestedCommand(
   if (targetDevice === "mc" && typeof options.mcFoodProcessor === "undefined" && typeof process.env.MC_HAS_FOOD_PROCESSOR !== "undefined") {
     suggestedFlags.push(`--mc-food-processor ${process.env.MC_HAS_FOOD_PROCESSOR}`);
   }
+  const localeKey = targetDevice === "tm" ? "TM_LOCALE" : "MC_LOCALE";
+  if (typeof options.locale === "undefined" && typeof options.language === "undefined" && process.env[localeKey]) {
+    suggestedFlags.push(`--locale ${process.env[localeKey]}`);
+  }
 
   const hasImageOption = options.noImage || options.useSourceImage || options.recreateImage || options.recreateImageWithSourceImages || options.imageReferenceSource;
   if (!hasImageOption && imageMode) {
@@ -1650,264 +1766,6 @@ function formatGenericCliError(error: any): string {
   ].join("\n");
 }
 
-export function cleanHtmlText(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/<[^>]*>/g, "")
-    .replace(/&frac12;/g, "½")
-    .replace(/&frac14;/g, "¼")
-    .replace(/&frac34;/g, "¾")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-export function parseIsoDuration(duration: string): number {
-  if (!duration) return 0;
-  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (!match) return 0;
-  const hours = match[1] ? parseInt(match[1], 10) : 0;
-  const minutes = match[2] ? parseInt(match[2], 10) : 0;
-  const seconds = match[3] ? parseInt(match[3], 10) : 0;
-  return hours * 60 + minutes + Math.round(seconds / 60);
-}
-
-function turboModeFromText(durationText: string, countText?: string) {
-  const pulseDuration = Number(durationText.replace(",", "."));
-  if (pulseDuration !== 0.5 && pulseDuration !== 1 && pulseDuration !== 2) {
-    return undefined;
-  }
-  const pulseCount = countText ? parseInt(countText, 10) : undefined;
-  return {
-    type: "turbo" as const,
-    pulseDuration,
-    ...(pulseCount && pulseCount > 0 ? { pulseCount } : {})
-  };
-}
-
-export function mapOfficialCookidooToInput(recipe: any): CookidooRecipeInput {
-  const ingredients = Array.isArray(recipe.recipeIngredient) ? recipe.recipeIngredient : [];
-  const steps = Array.isArray(recipe.recipeInstructions) ? recipe.recipeInstructions : [];
-
-  const parsedIngredients = ingredients.map((ingText: string, idx: number) => ({
-    id: `ing-${idx}`,
-    text: cleanHtmlText(ingText)
-  }));
-
-  const parsedSteps = steps.map((stepObj: any) => {
-    const stepText = cleanHtmlText(typeof stepObj === "string" ? stepObj : stepObj.text || "");
-    const ingredientAnnotations: any[] = [];
-    const modeAnnotations: any[] = [];
-    const intervals: [number, number][] = [];
-
-    const hasOverlap = (start: number, end: number) => {
-      for (const [s, e] of intervals) {
-        if (start < e && end > s) return true;
-      }
-      return false;
-    };
-
-    // 1. Build mode annotations first
-    const modePatterns = [
-      {
-        pattern: /\bTurbo\s*\/\s*(\d+(?:[.,]\d+)?)\s*Sek\.?(?:\s*\/\s*(\d+)\s*(?:x|Mal))?/gi,
-        parser: (_match: string, p1: string, p2: string) => turboModeFromText(p1, p2)
-      },
-      {
-        pattern: /\b(?:(\d+)\s*(?:x|Mal)\s*)?(\d+(?:[.,]\d+)?)\s*Sek\.?\s*\/\s*Turbo\b/gi,
-        parser: (_match: string, p1: string, p2: string) => turboModeFromText(p2, p1)
-      },
-      {
-        pattern: /\b(\d+)\s*(?:Sek\.|Min\.)\/(?:\d+°C\/|Varoma\/)?(?:Linkslauf\/|Rechtslauf\/)?Stufe\s*(\d+(?:\.\d+)?)/gi,
-        parser: (match: string, p1: string, p2: string) => {
-          const isVaroma = match.toLowerCase().includes("varoma");
-          const durationSec = match.toLowerCase().includes("min") ? parseInt(p1, 10) * 60 : parseInt(p1, 10);
-          if (isVaroma) {
-            return { type: "steaming" as const, time: durationSec, speed: p2 as any };
-          }
-          const speedNum = parseFloat(p2);
-          if (speedNum >= 6) {
-            return { type: "blend" as const, time: durationSec, speed: p2 as any };
-          }
-          return { type: "cook" as const, time: durationSec, temperature: 100, speed: p2 as any };
-        }
-      },
-      {
-        pattern: /Teig\s*[\uE000-\uE002]\/(\d+)\s*(?:Sek\.|Min\.)/gi,
-        parser: (match: string, p1: string) => {
-          const durationSec = match.toLowerCase().includes("min") ? parseInt(p1, 10) * 60 : parseInt(p1, 10);
-          return { type: "dough" as const, time: durationSec };
-        }
-      }
-    ];
-
-    modePatterns.forEach(({ pattern, parser }) => {
-      const matches = Array.from(stepText.matchAll(pattern));
-      for (const match of matches) {
-        if (match.index === undefined) continue;
-        const start = match.index;
-        const end = start + match[0].length;
-        if (!hasOverlap(start, end)) {
-          const mappedMode = parser(match[0], match[1], match[2] || "");
-          if (mappedMode) {
-            modeAnnotations.push({
-              matchedSubstring: match[0],
-              mode: mappedMode
-            });
-            intervals.push([start, end]);
-          }
-        }
-      }
-    });
-
-    // 2. Build ingredient annotations
-    const candidateIngredients: { word: string; ingId: string }[] = [];
-    parsedIngredients.forEach((ing: { id: string; text: string }) => {
-      const cleanIng = ing.text
-        .replace(/^\d+(?:\s*[\d/½¼¾+&;-]+)*\s*(?:g|kg|ml|TL|EL|Prise|Prisen|Würfel|Stück|portions?|g\.?|kg\.?|ml\.?)\s+/i, "")
-        .trim();
-      
-      const words = cleanIng.split(/[\s,.-]+/);
-      words.forEach((word: string) => {
-        const trimmed = word.trim();
-        if (trimmed.length > 3) {
-          candidateIngredients.push({ word: trimmed, ingId: ing.id });
-        }
-      });
-    });
-
-    // Sort by word length descending to prioritize longer matches
-    candidateIngredients.sort((a, b) => b.word.length - a.word.length);
-
-    candidateIngredients.forEach(({ word, ingId }) => {
-      const escaped = word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const regex = new RegExp(`\\b(${escaped}\\w*)\\b`, 'gi');
-      const matches = Array.from(stepText.matchAll(regex));
-      for (const match of matches) {
-        if (match.index === undefined) continue;
-        const start = match.index;
-        const end = start + match[0].length;
-        if (!hasOverlap(start, end)) {
-          ingredientAnnotations.push({
-            matchedSubstring: match[1],
-            ingredientId: ingId
-          });
-          intervals.push([start, end]);
-        }
-      }
-    });
-
-    return {
-      text: stepText,
-      ingredientAnnotations,
-      modeAnnotations
-    };
-  });
-
-  return {
-    title: recipe.name || "Cookidoo Recipe",
-    prepTime: recipe.prepTime ? parseIsoDuration(recipe.prepTime) : 0,
-    totalTime: recipe.totalTime ? parseIsoDuration(recipe.totalTime) : 0,
-    servingSize: parseInt(recipe.recipeYield, 10) || 1,
-    servingUnitText: recipe.recipeYield ? recipe.recipeYield.replace(/^\d+\s*/, "") : "Stück",
-    ingredients: parsedIngredients,
-    steps: parsedSteps,
-    hints: "",
-    settings: { locale: "de-DE" }
-  };
-}
-
-export function mapCustomCookidooToInput(recipe: any): CookidooRecipeInput {
-  const content = recipe.recipeContent || {};
-  const ingredients = (content.ingredients || []).map((ing: any, idx: number) => ({
-    id: `ing-${idx}`,
-    text: ing.text
-  }));
-
-  return {
-    title: content.name || "Custom Recipe",
-    prepTime: Math.round((content.prepTime || 0) / 60),
-    totalTime: Math.round((content.totalTime || 0) / 60),
-    servingSize: content.yield?.value || 1,
-    servingUnitText: content.yield?.unitText || "Portionen",
-    ingredients,
-    steps: (content.instructions || []).map((step: any) => {
-      const stepText = step.text || "";
-      const ingredientAnnotations: any[] = [];
-      const modeAnnotations: any[] = [];
-      
-      if (Array.isArray(step.annotations)) {
-        step.annotations.forEach((ann: any) => {
-          const matchedSubstring = stepText.slice(ann.position.offset, ann.position.offset + ann.position.length);
-          if (ann.type === "INGREDIENT") {
-            const ingText = typeof ann.data.description === "string" 
-              ? ann.data.description 
-              : ann.data.description?.text || "";
-            const ingIdx = (content.ingredients || []).findIndex((ing: any) => ing.text.toLowerCase().includes(ingText.toLowerCase()));
-            const ingredientId = ingIdx !== -1 ? `ing-${ingIdx}` : `ing-0`;
-            ingredientAnnotations.push({
-              matchedSubstring,
-              ingredientId
-            });
-          } else if (ann.type === "MODE") {
-            const modeName = ann.name;
-            const modeData = ann.data || {};
-            let mappedMode: any = null;
-            if (modeName === "dough") {
-              mappedMode = { type: "dough", time: modeData.time || 60 };
-            } else if (modeName === "blend") {
-              mappedMode = { type: "blend", time: modeData.time || 30, speed: modeData.speed || "7" };
-            } else if (modeName === "turbo") {
-              mappedMode = { type: "turbo", pulseDuration: modeData.time || modeData.pulseDuration || 2, pulseCount: modeData.pulseCount };
-            } else if (modeName === "warm_up" || modeName === "warmUp") {
-              mappedMode = { type: "warmUp", temperature: Number(modeData.temperature?.value ?? 37), speed: modeData.speed || "1" };
-            } else if (modeName === "cook") {
-              mappedMode = { type: "cook", time: modeData.time || 60, temperature: Number(modeData.temperature?.value ?? 100), speed: modeData.speed || "1" };
-            } else if (modeName === "rice_cooker" || modeName === "riceCooker") {
-              mappedMode = { type: "riceCooker" };
-            } else if (modeName === "steaming") {
-              mappedMode = { type: "steaming", time: modeData.time || 60, speed: modeData.speed || "1", accessory: modeData.accessory || "Varoma" };
-            } else if (modeName === "browning") {
-              mappedMode = { type: "browning", time: modeData.time || 60, temperature: Number(modeData.temperature?.value ?? 140) };
-            }
-            if (mappedMode) {
-              modeAnnotations.push({
-                matchedSubstring,
-                mode: mappedMode
-              });
-            }
-          }
-        });
-      }
-      return {
-        text: stepText,
-        ingredientAnnotations,
-        modeAnnotations
-      };
-    }),
-    hints: formatCookidooHints(content.hints),
-    settings: { locale: "de-DE" }
-  };
-}
-
-function formatCookidooHints(hints: unknown): string {
-  if (typeof hints === "string") return hints;
-  if (!Array.isArray(hints)) return "";
-  return hints
-    .map((hint) => {
-      if (typeof hint === "string") return hint;
-      if (hint && typeof hint === "object") {
-        const content = (hint as any).content ?? (hint as any).text;
-        return typeof content === "string" ? cleanHtmlText(content) : "";
-      }
-      return "";
-    })
-    .filter(Boolean)
-    .join("\n");
-}
-
 export function mapMonsieurCuisineToInput(recipe: any): any {
   const serving = recipe.servingSizes?.[0] || recipe.servingSize || {};
   return {
@@ -2011,11 +1869,11 @@ export function formatRecipeForTerminal(device: "mc" | "tm", recipe: any): strin
         recipe.recipeIngredientGroups ||
         recipe.recipeStepGroups ||
         recipe.servingSize
-      ));
+    ));
     if (looksLikeOfficialCookidooRecipe) {
-      input = mapOfficialCookidooToInputCore(recipe);
+      input = mapOfficialCookidooToInput(recipe);
     } else {
-      input = mapCustomCookidooToInputCore(recipe);
+      input = mapCustomCookidooToInput(recipe);
     }
     return adapter.formatInputForTerminal(input);
   } else {

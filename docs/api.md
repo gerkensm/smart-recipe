@@ -32,6 +32,7 @@ import { detectRecipeSource, fetchRecipeSourceWithRaw } from "smart-recipe/sourc
 const source = detectRecipeSource("https://cookidoo.de/recipes/recipe/de-DE/r776048");
 const { raw, page } = await fetchRecipeSourceWithRaw(source, {
   cookies: { tm: process.env.TM_COOKIE },
+  // Source API locale. Cookidoo URLs usually carry this already; pass it for IDs.
   locale: "de-DE",
   includeImageBytes: true,
 });
@@ -77,6 +78,7 @@ const adapter = getDeviceAdapter("tm");
 const generated = await generateSmartRecipe({
   page,
   adapter,
+  // Target recipe locale/language.
   locale: "de-DE",
   openAIModel: "gpt-5.5",
   reasoningEffort: "medium",

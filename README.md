@@ -264,6 +264,15 @@ Source and target are separate. `--target` / `--device` chooses where the genera
 
 Monsieur Cuisine and Cookidoo source URLs require the matching saved session cookie. In an interactive terminal, SmartRecipe prompts to log in and retries retrieval when the source session is missing or expired.
 
+The generated recipe language is also explicit. Use `--locale` (or `--language`) to choose the target language and catalog:
+
+```bash
+smart-recipe create "https://example.com/recipe" --target mc --locale en-US
+smart-recipe create "https://example.com/recipe" --target mc --locale en
+```
+
+Two-letter aliases are accepted for supported locales: `de`, `en`, `fr`, `it`, `pl`, and `cs`. If no target locale is configured, the interactive CLI asks which locale to use and can save it as `MC_LOCALE` or `TM_LOCALE`. For authenticated source recipes, the source URL locale is used when present; otherwise use `--source-locale` to choose the source API locale independently from the generated recipe locale.
+
 ---
 
 ## Recreate the recipe image
@@ -441,7 +450,7 @@ SmartRecipe bundles verified Monsieur Cuisine catalog data for:
 * English: `en-US`
 * Italian: `it-IT`
 
-Default Monsieur Cuisine locale:
+Target Monsieur Cuisine locale for generation/upload:
 ```bash
 MC_LOCALE=de-DE
 ```
@@ -457,9 +466,17 @@ SmartRecipe supports Cookidoo locales based on domains:
 * Polish (Poland): `pl-PL` (via `cookidoo.pl`)
 * Czech (Czechia): `cs-CZ` (via `cookidoo.cz`)
 
-Default Thermomix locale:
+Target Thermomix locale for generation/upload:
 ```bash
 TM_LOCALE=de-DE
+```
+
+CLI flags:
+```bash
+smart-recipe create "https://example.com/recipe" --locale fr-FR
+smart-recipe create "https://example.com/recipe" --locale fr
+smart-recipe create r776048 --source-locale de-DE --locale en-US
+smart-recipe create r776048 --source-locale de --locale en
 ```
 
 ---

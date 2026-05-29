@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { OpenAIRecipeGenerator } from "../src/llm/openai-generator.js";
 import { accessoryHardwareRules, buildRecipeImagePrompt, buildRecipeInstructions } from "../src/llm/prompts.js";
 import type { RecipeInput } from "../src/recipes/schema.js";
 import type { RetrievedRecipePage } from "../src/retriever/types.js";
@@ -61,6 +62,41 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("PARALLEL PREP SEQUENCING");
     expect(prompt).toContain("GLOBAL TIMELINE OPTIMIZATION");
     expect(prompt).toContain("Use the cooking time in the following step to {task}.");
+  });
+
+  it("passes the requested locale into OpenAI generation", async () => {
+    let request: any;
+    const client = {
+      responses: {
+        create: async (body: any) => {
+          request = body;
+          return {
+            output_text: JSON.stringify({
+              title: "Tomato Soup",
+              description: "A bright soup.",
+              settings: { locale: "en-US", complexityId: 22 },
+              categoryIds: [],
+              nutrients: [],
+              servingSize: {
+                amount: 4,
+                unit: "servings",
+                instruction: "",
+                preparationTime: 10,
+                readyInTime: 35,
+                ingredientGroups: [{ name: "Soup", ingredients: [{ name: "tomatoes", amount: 800, unit: "g", isOptional: false }] }],
+                steps: [{ title: "Serve", description: "Serve warm.", mode: { type: "none" } }]
+              }
+            })
+          };
+        }
+      }
+    };
+    const generator = new OpenAIRecipeGenerator({ client: client as any, locale: "en-US" });
+
+    await generator.generate(pageFixture, { locale: "en-US" });
+
+    expect(request.instructions).toContain("set settings.locale to en-US");
+    expect(request.input[0].content[0].text).toContain("Preferred locale: en-US");
   });
 
   it("includes accessory and hardware rules with de-DE device terms", () => {

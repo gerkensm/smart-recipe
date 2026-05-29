@@ -72,6 +72,8 @@ Authenticated sources use source cookies, separate from upload cookies:
 - `options.cookies.tm` for Cookidoo/Thermomix source retrieval.
 - CLI options map to these via `--mc-source-cookie`, `--tm-source-cookie`, or `--source-cookie`.
 
+Generation/upload locale is target-specific and separate from source retrieval locale. The CLI accepts `--locale` / `--language` for the generated recipe and asks interactively when no `MC_LOCALE` or `TM_LOCALE` is configured. Full locale tags and supported two-letter aliases are accepted (`de`, `en`, `fr`, `it`, `pl`, `cs`). `--source-locale` controls authenticated source API calls only when the source URL or ID does not already provide a locale.
+
 Cookidoo official recipe payloads can arrive in grouped API form (`recipeIngredientGroups` / `recipeStepGroups`) rather than JSON-LD form (`recipeIngredient` / `recipeInstructions`). The Cookidoo formatter and mapper normalize both shapes.
 
 ## Pipeline Split
