@@ -635,6 +635,12 @@ function isInteractiveTerminal(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
+function browserSandboxFromEnv(): boolean | undefined {
+  const raw = process.env.SMART_RECIPE_BROWSER_SANDBOX;
+  if (raw === undefined) return undefined;
+  return /^(1|true|yes|on)$/i.test(raw);
+}
+
 async function buildDoctorReport(device: "mc" | "tm", options: any) {
   const adapter = getDeviceAdapter(device);
   const cookieKey = cookieKeyForDevice(device);
@@ -745,6 +751,9 @@ program
   .option("--timeout <seconds>", "Seconds to wait for login to complete", "300")
   .option("--profile-dir <path>", "Playwright browser profile directory")
   .option("--start-url <url>", "URL to open in the login window")
+  .option("--browser-channel <channel>", "Installed browser channel for Playwright, e.g. chrome or msedge")
+  .option("--browser-path <path>", "Path to an installed browser executable")
+  .option("--disable-browser-sandbox", "Launch Chromium with Playwright's default disabled sandbox behavior")
   .option("--keep-open", "Leave the browser window open after capturing cookies")
   .option("--no-install-browser", "Do not automatically download Playwright Chromium if it is missing")
   .action(async (options) => {
@@ -768,6 +777,9 @@ program
       timeoutMs: Number(options.timeout) * 1000,
       keepOpen: options.keepOpen,
       installBrowsers: options.installBrowser,
+      browserChannel: options.browserChannel ?? process.env.SMART_RECIPE_BROWSER_CHANNEL,
+      browserPath: options.browserPath ?? process.env.SMART_RECIPE_BROWSER_PATH,
+      browserSandbox: options.disableBrowserSandbox ? false : browserSandboxFromEnv(),
       credentials,
       onStatus: printStatus
     } as any);
@@ -825,6 +837,9 @@ program
 
         const loginResult = await adapter.browserLogin({
           locale: sourceDevice === "tm" ? (process.env.TM_LOCALE ?? "de-DE") : (process.env.MC_LOCALE ?? "de-DE"),
+          browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
+          browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
+          browserSandbox: browserSandboxFromEnv(),
           onStatus: printStatus,
         } as any);
 

@@ -20,6 +20,9 @@ export interface BrowserLoginOptions {
   headless?: boolean;
   keepOpen?: boolean;
   installBrowsers?: boolean;
+  browserChannel?: string;
+  browserPath?: string;
+  browserSandbox?: boolean;
   pollIntervalMs?: number;
   credentials?: {
     email: string;
@@ -99,12 +102,17 @@ export async function browserLoginForMonsieurCuisine(options: BrowserLoginOption
 
   let context: BrowserContext | undefined;
   try {
+    const browserChannel = options.browserChannel ?? process.env.SMART_RECIPE_BROWSER_CHANNEL;
+    const browserPath = options.browserPath ?? process.env.SMART_RECIPE_BROWSER_PATH;
     context = await launchChromiumApp({
       userDataDir,
       startUrl,
       windowSize,
       headless: options.headless ?? false,
-      installBrowsers: options.installBrowsers ?? true,
+      installBrowsers: options.installBrowsers ?? !(browserChannel || browserPath),
+      browserChannel,
+      browserPath,
+      browserSandbox: options.browserSandbox ?? parseBrowserSandboxEnv() ?? Boolean(browserChannel || browserPath),
       onStatus: options.onStatus
     });
 
@@ -158,6 +166,9 @@ async function launchChromiumApp(options: {
   windowSize: { width: number; height: number };
   headless: boolean;
   installBrowsers: boolean;
+  browserChannel?: string;
+  browserPath?: string;
+  browserSandbox: boolean;
   onStatus?: (message: string) => void;
 }): Promise<BrowserContext> {
   try {
@@ -175,9 +186,15 @@ function launchChromiumAppOnce(options: {
   startUrl: string;
   windowSize: { width: number; height: number };
   headless: boolean;
+  browserChannel?: string;
+  browserPath?: string;
+  browserSandbox: boolean;
 }): Promise<BrowserContext> {
   return chromium.launchPersistentContext(options.userDataDir, {
     headless: options.headless,
+    channel: options.browserChannel,
+    executablePath: options.browserPath,
+    chromiumSandbox: options.browserSandbox,
     viewport: null,
     args: [
       `--app=${options.startUrl}`,
@@ -434,6 +451,11 @@ function getSetCookieHeaders(headers: Headers): string[] {
   return single ? [single] : [];
 }
 
+function parseBrowserSandboxEnv(): boolean | undefined {
+  const raw = process.env.SMART_RECIPE_BROWSER_SANDBOX;
+  if (raw === undefined) return undefined;
+  return /^(1|true|yes|on)$/i.test(raw);
+}
 
 function hasRequiredSessionCookies(cookie: string): boolean {
   return cookie.includes("wordpress_logged_in_") && cookie.includes("lidl_sso_id_token=");

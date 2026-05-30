@@ -17,6 +17,9 @@ export interface DeviceAdapter<TInput = any, TPayload = any> {
     headless?: boolean;
     keepOpen?: boolean;
     installBrowsers?: boolean;
+    browserChannel?: string;
+    browserPath?: string;
+    browserSandbox?: boolean;
     credentials?: { email: string; password?: string };
     onStatus?: (message: string) => void;
   }): Promise<{ cookie: string; source: string; cookieNames: string[] }>;

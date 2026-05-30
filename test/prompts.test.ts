@@ -18,6 +18,9 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("GROSS VS. NET WEIGHT RULE");
     expect(prompt).toContain("FILL-LEVEL PHYSICS");
     expect(prompt).toContain("confit, poaching, boiling, braising");
+    expect(prompt).toContain("PRACTICAL WEIGHING AND MARKET QUANTITIES");
+    expect(prompt).toContain("only accurate to about 10-20 g");
+    expect(prompt).toContain("400 g or 500 g ground beef");
     expect(prompt).toContain("HEAT-UP TIME BUDGET");
     expect(prompt).toContain("add about 6-10 min before active steaming/boiling");
     expect(prompt).toContain("SIMMERING BASKET LIQUID LEVEL");
@@ -59,6 +62,9 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("GROSS VS. NET WEIGHT RULE");
     expect(prompt).toContain("FILL-LEVEL PHYSICS");
     expect(prompt).toContain("A pan amount such as 2-4 tbsp oil is only enough for sautéing/aromatics");
+    expect(prompt).toContain("PRACTICAL WEIGHING AND MARKET QUANTITIES");
+    expect(prompt).toContain("Do not use scale steps for spices");
+    expect(prompt).toContain("normal to buy in the target country");
     expect(prompt).toContain("HEAT-UP TIME BUDGET");
     expect(prompt).toContain("SIMMERING BASKET LIQUID LEVEL");
     expect(prompt).toContain("potatoes, lentils, pasta, eggs");

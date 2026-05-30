@@ -44,6 +44,9 @@ export class MonsieurCuisineAdapter implements DeviceAdapter {
     headless?: boolean;
     keepOpen?: boolean;
     installBrowsers?: boolean;
+    browserChannel?: string;
+    browserPath?: string;
+    browserSandbox?: boolean;
     credentials?: { email: string; password?: string };
     onStatus?: (message: string) => void;
   }) {
@@ -54,6 +57,9 @@ export class MonsieurCuisineAdapter implements DeviceAdapter {
       headless: options.headless,
       keepOpen: options.keepOpen,
       installBrowsers: options.installBrowsers,
+      browserChannel: options.browserChannel,
+      browserPath: options.browserPath,
+      browserSandbox: options.browserSandbox,
       credentials: options.credentials,
       onStatus: options.onStatus,
     });

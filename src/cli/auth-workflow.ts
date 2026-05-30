@@ -138,6 +138,9 @@ async function trySilentSessionRefresh(adapter: any, configPath: string): Promis
       headless: true,
       timeoutMs: 8000,
       installBrowsers: false,
+      browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
+      browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
+      browserSandbox: browserSandboxFromEnv(),
       onStatus: () => undefined,
     });
     if (process.env.SAVE_SETTINGS !== "false") {
@@ -165,6 +168,9 @@ export async function attemptBrowserLogin(
   blankLine();
   const result = await adapter.browserLogin({
     locale,
+    browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
+    browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
+    browserSandbox: browserSandboxFromEnv(),
     credentials: process.env[loginKey] ? { email: process.env[loginKey], password: process.env[pwKey] } : undefined,
     onStatus: printStatus
   });
@@ -246,6 +252,9 @@ function makeSilentBrowserAuthProvider(adapter: any, configPath: string): any {
       printStatus(`No ${adapter.deviceName} cookie found. Opening login window...`);
       const result = await adapter.browserLogin({
         locale,
+        browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
+        browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
+        browserSandbox: browserSandboxFromEnv(),
         credentials: process.env[loginKey] ? { email: process.env[loginKey], password: process.env[pwKey] } : undefined,
         onStatus: printStatus
       });
@@ -254,6 +263,12 @@ function makeSilentBrowserAuthProvider(adapter: any, configPath: string): any {
       return { cookie: result.cookie, source: result.source };
     }
   };
+}
+
+function browserSandboxFromEnv(): boolean | undefined {
+  const raw = process.env.SMART_RECIPE_BROWSER_SANDBOX;
+  if (raw === undefined) return undefined;
+  return /^(1|true|yes|on)$/i.test(raw);
 }
 
 async function maybeSaveSessionCookie(
