@@ -1,4 +1,4 @@
-import { CookidooError, CookidooRateLimitError, isRateLimitBody } from "./errors.js";
+import { CookidooAuthError, CookidooError, CookidooRateLimitError, isRateLimitBody } from "./errors.js";
 
 export interface Localization {
   domain: string;
@@ -222,6 +222,15 @@ async function parseResponse<T>(res: Response, opts: CookidooRequestOptions): Pr
     });
   }
 
+  if (isCookidooLoginPage(parsed, res.headers.get("content-type"))) {
+    throw new CookidooAuthError({
+      status: 401,
+      body: summarizeLoginPage(parsed),
+      url: opts.path,
+      method: opts.method ?? "GET",
+    });
+  }
+
   return parsed as T;
 }
 
@@ -240,4 +249,32 @@ function safeJson(text: string): unknown {
   } catch {
     return text;
   }
+}
+
+function isCookidooLoginPage(body: unknown, contentType: string | null): boolean {
+  if (typeof body !== "string") return false;
+  const lower = body.toLowerCase();
+  return (
+    lower.includes("<!doctype html") &&
+    lower.includes("cookidoo") &&
+    (
+      lower.includes("login-srv/login") ||
+      lower.includes("login-view") ||
+      lower.includes("melde dich auf cookidoo") ||
+      lower.includes("sign in to cookidoo")
+    )
+  ) || (
+    Boolean(contentType?.toLowerCase().includes("text/html")) &&
+    lower.includes("cookidoo") &&
+    lower.includes("password")
+  );
+}
+
+function summarizeLoginPage(body: unknown): unknown {
+  if (typeof body !== "string") return body;
+  const title = body.match(/<title[^>]*>(.*?)<\/title>/is)?.[1]?.replace(/\s+/g, " ").trim();
+  return {
+    kind: "cookidoo-login-page",
+    title,
+  };
 }

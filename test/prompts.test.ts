@@ -16,6 +16,13 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("STEAMING PREHEAT CHOICE");
     expect(prompt).toContain("SCRAPE DOWN RULE");
     expect(prompt).toContain("GROSS VS. NET WEIGHT RULE");
+    expect(prompt).toContain("FILL-LEVEL PHYSICS");
+    expect(prompt).toContain("confit, poaching, boiling, braising");
+    expect(prompt).toContain("HEAT-UP TIME BUDGET");
+    expect(prompt).toContain("add about 6-10 min before active steaming/boiling");
+    expect(prompt).toContain("SIMMERING BASKET LIQUID LEVEL");
+    expect(prompt).toContain("500 ml/g liquid is only the minimum for steam generation");
+    expect(prompt).toContain("usually about 1200-1800 g");
     expect(prompt).toContain("bei der Abfrage zu Aufheizen 'Ja' wählen");
     expect(prompt).toContain("bei der Abfrage zu Aufheizen 'Nein' wählen");
     expect(prompt).toContain("mit dem Spatel nach unten schieben");
@@ -50,6 +57,11 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("select 'No' when asked to preheat");
     expect(prompt).toContain("scrape down the sides of the bowl using the spatula");
     expect(prompt).toContain("GROSS VS. NET WEIGHT RULE");
+    expect(prompt).toContain("FILL-LEVEL PHYSICS");
+    expect(prompt).toContain("A pan amount such as 2-4 tbsp oil is only enough for sautéing/aromatics");
+    expect(prompt).toContain("HEAT-UP TIME BUDGET");
+    expect(prompt).toContain("SIMMERING BASKET LIQUID LEVEL");
+    expect(prompt).toContain("potatoes, lentils, pasta, eggs");
     expect(prompt).toContain("Peel/trim {ingredient} (yields approx. {net} g)");
     expect(prompt).toContain("After pureeing hot contents, wait about 10 seconds");
     expect(prompt).toContain("cut into pieces of approx. 3-4 cm");
@@ -121,6 +133,8 @@ describe("LLM prompt guidance", () => {
     expect(rules).toContain("Nach dem Mixen heißer Zutaten ca. 10 Sekunden warten");
     expect(rules).toContain("in ca. 3–4 cm große Stücke schneiden");
     expect(rules).toContain("mindestens 500 ml");
+    expect(rules).toContain("500 ml/g is only enough to create steam");
+    expect(rules).toContain("usually about 1200-1800 g");
   });
 
   it("builds recipe image prompts from recipe and page context", () => {

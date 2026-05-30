@@ -313,7 +313,6 @@ export function createCookidooInstructions(input: CookidooRecipeInput): Step[] {
               data: {
                 time: m.time,
                 temperature: { value: String(clampedTemp), unit: "C" },
-                power: m.power ?? "Gentle",
               },
               position: { offset, length: term.length },
             };

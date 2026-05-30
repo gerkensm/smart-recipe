@@ -216,7 +216,9 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
     locale?: string;
     userDataDir?: string;
     timeoutMs?: number;
+    headless?: boolean;
     keepOpen?: boolean;
+    installBrowsers?: boolean;
     credentials?: { email: string; password?: string };
     onStatus?: (message: string) => void;
   }) {
@@ -224,7 +226,9 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
       locale: options.locale,
       userDataDir: options.userDataDir,
       timeoutMs: options.timeoutMs,
+      headless: options.headless,
       keepOpen: options.keepOpen,
+      installBrowsers: options.installBrowsers,
       credentials: options.credentials,
       onStatus: options.onStatus,
     });

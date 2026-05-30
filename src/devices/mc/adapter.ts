@@ -41,7 +41,9 @@ export class MonsieurCuisineAdapter implements DeviceAdapter {
     locale?: string;
     userDataDir?: string;
     timeoutMs?: number;
+    headless?: boolean;
     keepOpen?: boolean;
+    installBrowsers?: boolean;
     credentials?: { email: string; password?: string };
     onStatus?: (message: string) => void;
   }) {
@@ -49,7 +51,9 @@ export class MonsieurCuisineAdapter implements DeviceAdapter {
       locale: (options.locale ?? "de-DE") as SupportedLocale,
       userDataDir: options.userDataDir,
       timeoutMs: options.timeoutMs,
+      headless: options.headless,
       keepOpen: options.keepOpen,
+      installBrowsers: options.installBrowsers,
       credentials: options.credentials,
       onStatus: options.onStatus,
     });

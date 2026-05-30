@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { Buffer } from "node:buffer";
 import { ThermomixAdapter } from "../src/devices/tm/adapter.js";
 import { CookidooClient } from "../src/devices/tm/client.js";
-import { CookidooRateLimitError } from "../src/devices/tm/errors.js";
+import { CookidooAuthError, CookidooRateLimitError } from "../src/devices/tm/errors.js";
 import type { CookidooRecipeInput } from "../src/devices/tm/schema.js";
 import { getImageDimensions } from "../src/devices/tm/payload.js";
 
@@ -243,7 +243,7 @@ describe("ThermomixAdapter", () => {
       expect((annotationBoth.data as any).accessory).toBe("VaromaAndSimmeringBasket");
     });
 
-    it("enforces browning mode constraints: clamps temperature to allowed list", () => {
+    it("enforces browning mode constraints: clamps temperature and omits power", () => {
       const inputBrowning: CookidooRecipeInput = {
         ...sampleInput,
         steps: [
@@ -255,7 +255,8 @@ describe("ThermomixAdapter", () => {
                 mode: {
                   type: "browning",
                   time: 300,
-                  temperature: 142 as any
+                  temperature: 142 as any,
+                  power: "Intensive" as any
                 }
               }
             ]
@@ -281,9 +282,11 @@ describe("ThermomixAdapter", () => {
 
       expect(ann1.name).toBe("browning");
       expect(ann1.data.temperature!.value).toBe("140"); // 142 is closest to 140
+      expect(ann1.data.power).toBeUndefined();
 
       expect(ann2.name).toBe("browning");
       expect(ann2.data.temperature!.value).toBe("160"); // 158 is closest to 160
+      expect(ann2.data.power).toBeUndefined();
     });
   });
 
@@ -716,6 +719,26 @@ describe("ThermomixAdapter", () => {
           upload_preset: "prod-customer-recipe-signed",
         })
       );
+    });
+
+    it("treats Cookidoo login HTML responses as an expired session", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        new Response("<!DOCTYPE html><html><title>Melde dich auf Cookidoo® an</title><body><form action=\"/login-srv/login\"><input name=\"password\"></form></body></html>", {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" }
+        })
+      ) as unknown as typeof fetch;
+      const client = new CookidooClient({
+        cookie: "_oauth2_proxy=expired",
+        locale: "de-DE",
+        fetch: fetchImpl,
+      });
+
+      await expect(client.requestImageSignature({
+        timestamp: 1234567890,
+        source: "uw",
+        customCoordinates: "0,0,1024,1024",
+      })).rejects.toThrow(CookidooAuthError);
     });
   });
 });

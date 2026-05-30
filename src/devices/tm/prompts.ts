@@ -55,7 +55,7 @@ export function buildCookidooRecipeInstructions(
     "GUIDED MODE RULES & CONSTRAINTS (based on exact Cookidoo editor values):",
     "1. COOK: Standard simmering/cooking. Temperature 37–120°C (any integer), time in seconds, speed soft/1–5, optional direction CW/CCW. Excluded by default for My Creations — only use if --extend-tm-modes is set.",
     "2. STEAMING: Varoma cooking. NO temperature field. Time 1–5940s (max 99 min). Speed: soft, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5. Direction: CW or CCW. Accessory: 'Varoma', 'Gareinsatz', or 'both'.",
-    "3. BROWNING: TM6/TM7 only. Time 1–1800s (max 30 min). Temperature MUST be one of [140, 145, 150, 155, 160]. Power: 'Gentle' (Leicht) or 'Intensive' (Intensiv).",
+    "3. BROWNING: TM6/TM7 only. Time 1–1800s (max 30 min). Temperature MUST be one of [140, 145, 150, 155, 160]. Do not set power; Cookidoo My Creations rejects the unconfirmed power field.",
     "4. DOUGH: Time 1–1200s (max 20 min). No speed or temperature.",
     "5. BLEND (Pürieren): HIGH-SPEED ONLY. Speed MUST be one of [6, 6.5, 7, 7.5, 8]. Time 10–300s (min 10s, max 5 min). Do NOT use for speed 1–5 operations — leave those as plain text runs.",
     "6. TURBO: Short maximum-speed pulses. Use 'pulseDuration' (must be exactly 0.5, 1, or 2) and optional 'pulseCount' (1–9).",

@@ -20,6 +20,11 @@ export async function resolveAuthInteractively(
     return makeSilentBrowserAuthProvider(adapter, configPath);
   }
 
+  const silentProvider = await trySilentSessionRefresh(adapter, configPath);
+  if (silentProvider) {
+    return silentProvider;
+  }
+
   console.log();
   console.log(`  \x1b[1m\x1b[33m⚠  No ${adapter.deviceName} session found.\x1b[0m`);
   console.log();
@@ -55,6 +60,29 @@ export async function resolveAuthInteractively(
   }
 
   return await promptForManualCookie(adapter, configPath);
+}
+
+async function trySilentSessionRefresh(adapter: any, configPath: string): Promise<any | null> {
+  if (adapter.id !== "tm") return null;
+
+  const locale = (process.env.TM_LOCALE ?? "de-DE") as any;
+  try {
+    console.error("  \x1b[2mChecking saved Cookidoo browser session silently...\x1b[0m");
+    const result = await adapter.browserLogin({
+      locale,
+      headless: true,
+      timeoutMs: 8000,
+      installBrowsers: false,
+      onStatus: () => undefined,
+    });
+    if (process.env.SAVE_SETTINGS !== "false") {
+      upsertDotEnvValue(configPath, "TM_COOKIE", result.cookie);
+    }
+    console.error("  \x1b[2mRefreshed Cookidoo session from saved browser profile.\x1b[0m");
+    return createAuthProvider(adapter, result.cookie);
+  } catch {
+    return null;
+  }
 }
 
 export async function attemptBrowserLogin(

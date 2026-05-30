@@ -67,7 +67,12 @@ export async function browserLoginForCookidoo(options: BrowserLoginOptions = {})
 
   const startUrl = `https://${domain}/profile/${langPath}/login?redirectAfterLogin=%2Ffoundation%2F${langPath}%2Ffor-you`;
 
-  options.onStatus?.(`Opening the Cookidoo login window at: ${startUrl}`);
+  const headless = options.headless ?? false;
+  options.onStatus?.(
+    headless
+      ? "Checking saved Cookidoo browser session silently..."
+      : `Opening the Cookidoo login window at: ${startUrl}`
+  );
 
   let context: BrowserContext | undefined;
   try {
@@ -75,7 +80,7 @@ export async function browserLoginForCookidoo(options: BrowserLoginOptions = {})
       userDataDir,
       startUrl,
       windowSize,
-      headless: options.headless ?? false,
+      headless,
       installBrowsers: options.installBrowsers ?? true,
       onStatus: options.onStatus,
     });
@@ -90,7 +95,7 @@ export async function browserLoginForCookidoo(options: BrowserLoginOptions = {})
       await autoFillCookidooLoginForm(page, options.credentials).catch((err) => {
         options.onStatus?.(`Auto-fill failed, please complete login manually: ${err.message}`);
       });
-    } else {
+    } else if (!headless) {
       options.onStatus?.("Finish login in the opened Cookidoo window.");
     }
 
