@@ -22,7 +22,10 @@ describe("LLM prompt guidance", () => {
     expect(prompt).toContain("only accurate to about 10-20 g");
     expect(prompt).toContain("400 g or 500 g ground beef");
     expect(prompt).toContain("HEAT-UP TIME BUDGET");
-    expect(prompt).toContain("add about 6-10 min before active steaming/boiling");
+    expect(prompt).toContain("Add heat-up time only when the step itself must bring cold contents up to cooking temperature");
+    expect(prompt).toContain("For one-pot pasta, follow the official MC pattern");
+    expect(prompt).toContain("package cooking time plus about 3 minutes");
+    expect(prompt).toContain("optional short extra-cooking step");
     expect(prompt).toContain("SIMMERING BASKET LIQUID LEVEL");
     expect(prompt).toContain("500 ml/g liquid is only the minimum for steam generation");
     expect(prompt).toContain("usually about 1200-1800 g");

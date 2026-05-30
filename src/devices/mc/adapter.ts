@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
-import type { DeviceAdapter } from "../adapter.js";
+import type { DeviceAdapter, DevicePromptOptions, RecipeUploadLogger } from "../adapter.js";
 import type { RetrievedRecipePage } from "../../retriever/types.js";
-import { RecipeInputSchema } from "../../recipes/schema.js";
+import { RecipeInputSchema, type RecipeInput, type SmartRecipePayload } from "../../recipes/schema.js";
 import { buildRecipeInstructions } from "../../llm/prompts.js";
 import { validateRecipeInput } from "../../recipes/validation.js";
 import { normalizeRecipeInput } from "../../recipes/normalize.js";
@@ -10,30 +10,32 @@ import { browserLoginForMonsieurCuisine } from "../../mc/browser-login.js";
 import { MonsieurCuisineSmartClient } from "../../mc/client.js";
 import { createSmartRecipePayload } from "../../recipes/payload.js";
 import { CookieAuthProvider } from "../../mc/auth.js";
-import { RetrievedRecipeImageProvider } from "../../pipeline/images.js";
+import type { AuthProvider } from "../../mc/auth.js";
+import { RetrievedRecipeImageProvider, type RecipeImageProvider } from "../../pipeline/images.js";
 import type { SupportedLocale } from "../../catalogs/types.js";
+import type { SmartRecipeLogger } from "../../logging/logger.js";
 
-export class MonsieurCuisineAdapter implements DeviceAdapter {
+export class MonsieurCuisineAdapter implements DeviceAdapter<RecipeInput, SmartRecipePayload> {
   readonly id = "mc" as const;
   readonly deviceName = "MonsieurCuisine" as const;
 
-  getSchema(options?: any) {
+  getSchema() {
     return RecipeInputSchema;
   }
 
-  getPromptInstructions(locale: string, options?: any) {
-    return buildRecipeInstructions(locale as SupportedLocale, options?.excludeModes);
+  getPromptInstructions(locale: string, options?: DevicePromptOptions) {
+    return buildRecipeInstructions(locale as SupportedLocale, options?.excludeModes as Parameters<typeof buildRecipeInstructions>[1]);
   }
 
   validateInput(input: unknown) {
     return validateRecipeInput(input);
   }
 
-  normalizeInput(input: any) {
+  normalizeInput(input: RecipeInput): RecipeInput {
     return normalizeRecipeInput(input);
   }
 
-  formatInputForTerminal(input: any) {
+  formatInputForTerminal(input: RecipeInput): string {
     return formatRecipeTerminal(input);
   }
 
@@ -72,8 +74,9 @@ export class MonsieurCuisineAdapter implements DeviceAdapter {
 
   async listDrafts(options: { cookie: string; page?: number; size?: number }) {
     const client = new MonsieurCuisineSmartClient({ cookie: options.cookie });
-    const result = await client.listDrafts({ page: options.page, size: options.size }) as any;
-    const recipes = (result?.data?.recipes ?? []).map((recipe: any) => {
+    const result = await client.listDrafts({ page: options.page, size: options.size });
+    const resultObject = result && typeof result === "object" ? result as { data?: { recipes?: McDraftRecipe[]; total?: number; totalPage?: number } } : {};
+    const recipes = (resultObject.data?.recipes ?? []).map((recipe) => {
       const id = recipe.id;
       const numericId = Number(id);
       return {
@@ -91,35 +94,36 @@ export class MonsieurCuisineAdapter implements DeviceAdapter {
     });
 
     return {
-      ...result,
+      ...(result && typeof result === "object" ? result : {}),
       data: {
-        ...result?.data,
+        ...resultObject.data,
         recipes,
-        total: result?.data?.total ?? recipes.length,
-        totalPage: result?.data?.totalPage ?? 1,
+        total: resultObject.data?.total ?? recipes.length,
+        totalPage: resultObject.data?.totalPage ?? 1,
       },
     };
   }
 
   async getRecipe(options: { cookie: string; id: string; public?: boolean }) {
     const client = new MonsieurCuisineSmartClient({ cookie: options.cookie });
-    const res = await client.getRecipe(options.id) as any;
-    return res?.data?.recipe ?? res;
+    const res = await client.getRecipe(options.id);
+    const response = res && typeof res === "object" ? res as { data?: { recipe?: unknown } } : undefined;
+    return response?.data?.recipe ?? res;
   }
 
-  createPayload(input: any) {
+  createPayload(input: RecipeInput): SmartRecipePayload {
     return createSmartRecipePayload({ ...input, thumbnailMediaId: null, detailsImageMediaId: null });
   }
 
   async upload(options: {
-    payload: any;
-    recipeInput: any;
+    payload: SmartRecipePayload;
+    recipeInput: RecipeInput;
     page: RetrievedRecipePage;
     locale: string;
     cookie: string;
-    logger: any;
-    imageProvider?: any;
-    authProvider?: any;
+    logger: RecipeUploadLogger;
+    imageProvider?: RecipeImageProvider<RecipeInput>;
+    authProvider?: AuthProvider;
   }) {
     const logger = options.logger;
     const locale = (options.locale ?? "de-DE") as SupportedLocale;
@@ -128,7 +132,7 @@ export class MonsieurCuisineAdapter implements DeviceAdapter {
       authProvider: options.authProvider ?? new CookieAuthProvider(options.cookie),
       cookie: options.cookie,
       locale,
-      logger,
+      logger: logger as SmartRecipeLogger,
     });
 
     const imageProvider = options.imageProvider ?? new RetrievedRecipeImageProvider();
@@ -162,4 +166,17 @@ export class MonsieurCuisineAdapter implements DeviceAdapter {
       payload: uploadPayload,
     };
   }
+}
+
+interface McDraftRecipe {
+  id?: string | number;
+  title?: string;
+  status?: string;
+  updatedAt?: string;
+  deviceTypes?: unknown;
+  ingredientCount?: number;
+  stepCount?: number;
+  hasImage?: boolean;
+  hasHints?: boolean;
+  recipeUrl?: string;
 }

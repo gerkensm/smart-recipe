@@ -2,7 +2,16 @@ import { describe, expect, it } from "vitest";
 import { createDeviceApi, type DeviceApiOptions } from "../src/devices/index.js";
 import type { DeviceAdapter } from "../src/devices/adapter.js";
 
-function fakeAdapter(): DeviceAdapter {
+interface FakeInput {
+  title: string;
+  normalized?: boolean;
+}
+
+interface FakePayload {
+  payloadTitle: string;
+}
+
+function fakeAdapter(): DeviceAdapter<FakeInput, FakePayload> {
   return {
     id: "mc",
     deviceName: "MonsieurCuisine",
@@ -26,7 +35,7 @@ function fakeAdapter(): DeviceAdapter {
 
 describe("DeviceApi", () => {
   it("exposes consistent device methods over an adapter", async () => {
-    const api = createDeviceApi({
+    const api = createDeviceApi<FakeInput, FakePayload>({
       device: "mc",
       cookie: "saved-cookie",
       adapter: fakeAdapter(),
@@ -36,9 +45,9 @@ describe("DeviceApi", () => {
     await expect(api.listRecipes({ size: 5 })).resolves.toEqual({ recipes: [], cookie: "saved-cookie", size: 5 });
     await expect(api.getRecipe({ id: "123" })).resolves.toEqual({ id: "123", cookie: "saved-cookie", public: undefined });
 
-    expect(api.normalizeInput({ title: "Soup" } as any)).toEqual({ title: "Soup", normalized: true });
-    expect(api.formatInputForTerminal({ title: "Soup" } as any)).toBe("formatted:Soup");
-    expect(api.createPayload({ title: "Soup" } as any)).toEqual({ payloadTitle: "Soup" });
+    expect(api.normalizeInput({ title: "Soup" })).toEqual({ title: "Soup", normalized: true });
+    expect(api.formatInputForTerminal({ title: "Soup" })).toBe("formatted:Soup");
+    expect(api.createPayload({ title: "Soup" })).toEqual({ payloadTitle: "Soup" });
 
     await expect(api.uploadRecipe({
       page: { url: "", finalUrl: "", title: "Soup", markdown: "", html: "", images: [] },

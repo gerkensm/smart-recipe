@@ -107,6 +107,7 @@ describe("Smart recipe payloads", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toContain("/servingSize/steps/0/mode/speed must be <= 3");
+    expect(result.formattedErrors).toContain("mode");
   });
 
   it("rejects fields that do not belong to the selected mode", () => {
@@ -125,6 +126,7 @@ describe("Smart recipe payloads", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toContain("/servingSize/steps/0/mode must NOT have additional properties");
+    expect(result.formattedErrors).toContain("seconds");
   });
 
   it("rounds nutrient amounts because the site requires integers", () => {

@@ -66,6 +66,7 @@
   "dependencies": {
     "@inquirer/prompts": "^7.3.3",
     "ajv": "^8.17.1",
+    "better-ajv-errors": "^2.0.3",
     "cheerio": "^1.0.0",
     "commander": "^13.1.0",
     "defuddle": "^0.6.4",
@@ -73,6 +74,7 @@
     "marked": "^15.0.12",
     "marked-terminal": "^7.3.0",
     "openai": "^6.37.0",
+    "ora": "^9.4.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
     "playwright": "^1.60.0",

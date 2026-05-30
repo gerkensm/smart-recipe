@@ -2,10 +2,12 @@ import process from "node:process";
 import { upsertDotEnvValue, mcHasFoodProcessor } from "../config/env.js";
 import type { GenerateSmartRecipeResult } from "../pipeline/import-url.js";
 import { OpenAIRecipeImageGenerator } from "../llm/openai-image-generator.js";
-import { NullImageProvider } from "../pipeline/images.js";
+import { NullImageProvider, type RecipeImageAsset, type RecipeImageProvider } from "../pipeline/images.js";
+import type { RetrievedRecipePage } from "../retriever/types.js";
 import type { SmartRecipeLogger } from "../logging/logger.js";
 import { confirm, password, select } from "./prompts.js";
 import { blankLine, colorCyan, colorDim, printSuccess, printWarning } from "./terminal.js";
+import { withCliSpinner } from "./spinner.js";
 
 export type RecipeImageMode = "generate" | "generate-with-sources" | "skip" | "none";
 
@@ -125,12 +127,16 @@ export async function resolveImageProvider(
   generated: GenerateSmartRecipeResult,
   isInteractive: boolean,
   options: any,
-  logger: SmartRecipeLogger
+  logger: SmartRecipeLogger,
+  spinnerEnabled = false
 ): Promise<{ imageMode: RecipeImageMode; imageProvider: any; prompted: boolean }> {
   const imageMode = await resolveImageMode(initialMode, generated, isInteractive);
+  const imageProvider = createImageProvider(imageMode, options, logger);
   return {
     imageMode,
-    imageProvider: createImageProvider(imageMode, options, logger),
+    imageProvider: imageProvider && imageMode.startsWith("generate") && spinnerEnabled
+      ? new SpinnerRecipeImageProvider(imageProvider)
+      : imageProvider,
     prompted: initialMode === null && isInteractive
   };
 }
@@ -319,4 +325,20 @@ function createImageProvider(
     includeSourceImages: imageMode === "generate-with-sources",
     logger,
   });
+}
+
+class SpinnerRecipeImageProvider<TRecipe> implements RecipeImageProvider<TRecipe> {
+  constructor(private readonly inner: RecipeImageProvider<TRecipe>) {}
+
+  async getImage(page: RetrievedRecipePage, recipe: TRecipe): Promise<RecipeImageAsset | undefined> {
+    return await withCliSpinner(
+      "Generating recipe image with OpenAI...",
+      true,
+      () => this.inner.getImage(page, recipe),
+      {
+        successMessage: "Generated recipe image.",
+        failureMessage: "Recipe image generation failed.",
+      }
+    );
+  }
 }

@@ -1,15 +1,46 @@
 import Ajv2020Module from "ajv/dist/2020.js";
+import type { ErrorObject } from "ajv";
+import betterAjvErrors from "better-ajv-errors";
 import { RecipeInputSchema, SmartRecipePayloadSchema, type RecipeInput } from "./schema.js";
 import type { SmartRecipePayload } from "./types.js";
 
 export interface ValidationResult {
   ok: boolean;
   errors: string[];
+  formattedErrors?: string;
 }
 
-function makeAjv(): any {
-  const Ajv2020 = Ajv2020Module as unknown as new (options: Record<string, unknown>) => any;
+interface AjvValidator {
+  (data: unknown): boolean;
+  errors?: ErrorObject[] | null;
+}
+
+interface AjvInstance {
+  compile(schema: unknown): AjvValidator;
+}
+
+function makeAjv(): AjvInstance {
+  const Ajv2020 = Ajv2020Module as unknown as new (options: Record<string, unknown>) => AjvInstance;
   return new Ajv2020({ allErrors: true, strict: false });
+}
+
+const ajv = makeAjv();
+const recipeInputValidator = ajv.compile(RecipeInputSchema);
+const smartRecipePayloadValidator = ajv.compile(SmartRecipePayloadSchema);
+
+export function formatAjvValidationErrors(schema: unknown, data: unknown, errors: ErrorObject[] | null | undefined): ValidationResult {
+  const ajvErrors = errors ?? [];
+  if (ajvErrors.length === 0) return { ok: false, errors: [] };
+
+  const conciseErrors = ajvErrors.map((error) => `${error.instancePath || "/"} ${error.message ?? "is invalid"}`);
+  let formattedErrors: string | undefined;
+  try {
+    const formatted = betterAjvErrors(schema, data, ajvErrors, { format: "cli", indent: 2 });
+    formattedErrors = formatted.trim() || undefined;
+  } catch {
+    formattedErrors = undefined;
+  }
+  return { ok: false, errors: conciseErrors, formattedErrors };
 }
 
 /**
@@ -24,19 +55,14 @@ function makeAjv(): any {
  * must be <= 3") that are easy for the model to interpret and correct.
  */
 export function validateRecipeInput(input: unknown): ValidationResult {
-  const ajv = makeAjv();
-  const validate = ajv.compile(RecipeInputSchema);
-  const ok = validate(input);
-  const errors = ok
-    ? []
-    : (validate.errors ?? []).map((error: any) => `${error.instancePath || "/"} ${error.message ?? "is invalid"}`);
-  return { ok, errors };
+  const ok = recipeInputValidator(input);
+  return ok ? { ok, errors: [] } : formatAjvValidationErrors(RecipeInputSchema, input, recipeInputValidator.errors);
 }
 
 export function assertRecipeInput(input: unknown): asserts input is RecipeInput {
   const result = validateRecipeInput(input);
   if (!result.ok) {
-    throw new TypeError(`Recipe input failed schema validation:\n${result.errors.join("\n")}`);
+    throw new TypeError(`Recipe input failed schema validation:\n${result.formattedErrors ?? result.errors.join("\n")}`);
   }
 }
 
@@ -54,14 +80,10 @@ export function assertRecipeInput(input: unknown): asserts input is RecipeInput 
  * LLM correction.
  */
 export function assertSmartRecipePayload(payload: SmartRecipePayload): SmartRecipePayload {
-  const ajv = makeAjv();
-  const validate = ajv.compile(SmartRecipePayloadSchema);
-  const ok = validate(payload);
+  const ok = smartRecipePayloadValidator(payload);
   if (!ok) {
-    const errors = (validate.errors ?? [])
-      .map((error: any) => `${error.instancePath || "/"} ${error.message ?? "is invalid"}`)
-      .join("\n");
-    throw new TypeError(`Recipe payload failed schema validation:\n${errors}`);
+    const result = formatAjvValidationErrors(SmartRecipePayloadSchema, payload, smartRecipePayloadValidator.errors);
+    throw new TypeError(`Recipe payload failed schema validation:\n${result.formattedErrors ?? result.errors.join("\n")}`);
   }
   return payload;
 }

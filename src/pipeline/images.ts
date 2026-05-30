@@ -1,4 +1,3 @@
-import type { RecipeInput } from "../recipes/schema.js";
 import type { RetrievedRecipePage } from "../retriever/types.js";
 
 export interface RecipeImageAsset {
@@ -9,8 +8,8 @@ export interface RecipeImageAsset {
   description?: string;
 }
 
-export interface RecipeImageProvider {
-  getImage(page: RetrievedRecipePage, recipe: RecipeInput): Promise<RecipeImageAsset | undefined>;
+export interface RecipeImageProvider<TRecipe = unknown> {
+  getImage(page: RetrievedRecipePage, recipe: TRecipe): Promise<RecipeImageAsset | undefined>;
 }
 
 export class RetrievedRecipeImageProvider implements RecipeImageProvider {

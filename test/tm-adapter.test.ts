@@ -50,6 +50,7 @@ describe("ThermomixAdapter", () => {
       const result = adapter.validateInput(invalid);
       expect(result.ok).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.formattedErrors).toContain("title");
     });
 
     it("normalizes and trims string fields", () => {

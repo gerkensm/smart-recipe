@@ -1,14 +1,17 @@
 import { Buffer } from "node:buffer";
 import Ajv2020Module from "ajv/dist/2020.js";
-import type { DeviceAdapter } from "../adapter.js";
+import type { ErrorObject } from "ajv";
+import type { DeviceAdapter, DevicePromptOptions, RecipeUploadLogger } from "../adapter.js";
 import type { RetrievedRecipePage } from "../../retriever/types.js";
 import { CookidooRecipeInputSchema, type CookidooRecipeInput } from "./schema.js";
-import { createCookidooMetaPatch, createCookidooInstructions, getImageDimensions } from "./payload.js";
+import { createCookidooMetaPatch, createCookidooInstructions, getImageDimensions, type CookidooPayload } from "./payload.js";
 import { buildCookidooRecipeInstructions } from "./prompts.js";
 import { browserLoginForCookidoo, passwordLoginForCookidoo } from "./browser-login.js";
 import { COOKIDOO_IMAGE_UPLOAD_PRESET, CookidooClient } from "./client.js";
-import { RetrievedRecipeImageProvider } from "../../pipeline/images.js";
+import { RetrievedRecipeImageProvider, type RecipeImageProvider } from "../../pipeline/images.js";
 import { extractJsonLd, findRecipeObjects } from "../../retriever/json-ld.js";
+import type { SupportedLocale } from "../../catalogs/types.js";
+import { formatAjvValidationErrors } from "../../recipes/validation.js";
 
 
 const ansi = {
@@ -25,47 +28,50 @@ const ansi = {
   gray: "\x1b[90m",
 };
 
-export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any> {
+type CookidooModeInput = NonNullable<CookidooRecipeInput["steps"][number]["modeAnnotations"]>[number]["mode"];
+type CookidooValidator = { (data: unknown): boolean; errors?: ErrorObject[] | null };
+
+const Ajv2020 = Ajv2020Module as unknown as new (options: Record<string, unknown>) => {
+  compile(schema: unknown): CookidooValidator;
+};
+const cookidooAjv = new Ajv2020({ allErrors: true, strict: false });
+const cookidooRecipeInputValidator = cookidooAjv.compile(CookidooRecipeInputSchema);
+
+export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, CookidooPayload> {
   readonly id = "tm" as const;
   readonly deviceName = "Thermomix" as const;
 
-  getSchema(options?: any) {
+  getSchema() {
     return CookidooRecipeInputSchema;
   }
 
-  getPromptInstructions(locale: string, options?: any) {
-    return buildCookidooRecipeInstructions(locale as any, options);
+  getPromptInstructions(locale: string, options?: DevicePromptOptions) {
+    return buildCookidooRecipeInstructions(locale as SupportedLocale, options);
   }
 
   validateInput(input: unknown) {
-    const Ajv2020 = Ajv2020Module as unknown as new (options: Record<string, unknown>) => any;
-    const ajv = new Ajv2020({ allErrors: true, strict: false });
-    const validate = ajv.compile(CookidooRecipeInputSchema);
-    const ok = validate(input);
-    const errors = ok
-      ? []
-      : (validate.errors ?? []).map(
-          (error: any) => `${error.instancePath || "/"} ${error.message ?? "is invalid"}`
-        );
-    return { ok, errors };
+    const ok = cookidooRecipeInputValidator(input);
+    return ok
+      ? { ok, errors: [] }
+      : formatAjvValidationErrors(CookidooRecipeInputSchema, input, cookidooRecipeInputValidator.errors);
   }
 
-  normalizeInput(input: any) {
+  normalizeInput(input: CookidooRecipeInput): CookidooRecipeInput {
     return {
       ...input,
       title: (input.title ?? "").trim(),
-      ingredients: (input.ingredients ?? []).map((i: any) => ({
+      ingredients: (input.ingredients ?? []).map((i) => ({
         id: (i.id ?? "").trim(),
         text: (i.text ?? "").trim(),
       })),
-      steps: (input.steps ?? []).map((step: any) => ({
+      steps: (input.steps ?? []).map((step) => ({
         text: (step.text ?? "").trim(),
-        ingredientAnnotations: (step.ingredientAnnotations ?? []).map((ann: any) => ({
+        ingredientAnnotations: (step.ingredientAnnotations ?? []).map((ann) => ({
           ...ann,
           matchedSubstring: (ann.matchedSubstring ?? "").trim(),
           ingredientId: (ann.ingredientId ?? "").trim(),
         })),
-        modeAnnotations: (step.modeAnnotations ?? []).map((ann: any) => ({
+        modeAnnotations: (step.modeAnnotations ?? []).map((ann) => ({
           ...ann,
           matchedSubstring: (ann.matchedSubstring ?? "").trim(),
         })),
@@ -104,7 +110,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
         offset: number;
         length: number;
         matchedSubstring: string;
-        data: any;
+        data: string | CookidooModeInput;
       }
 
       const searchOffsets: Record<string, number> = {};
@@ -179,7 +185,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
       // Print mode details on a separate line below the step
       for (const ann of resolved) {
         if (ann.type === "MODE") {
-          const m = ann.data;
+          const m = ann.data as CookidooModeInput;
           const params: string[] = [];
           if (m.type === "dough") {
             params.push(`${m.time}s`);
@@ -328,7 +334,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
     return result;
   }
 
-  createPayload(input: CookidooRecipeInput) {
+  createPayload(input: CookidooRecipeInput): CookidooPayload {
     // TM payload is created via meta and instruction patches. We return the patches.
     return {
       meta: createCookidooMetaPatch(input),
@@ -337,14 +343,13 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
   }
 
   async upload(options: {
-    payload: any;
+    payload: CookidooPayload;
     recipeInput: CookidooRecipeInput;
     page: RetrievedRecipePage;
     locale: string;
     cookie: string;
-    logger: any;
-    imageProvider?: any;
-    authProvider?: any;
+    logger: RecipeUploadLogger;
+    imageProvider?: RecipeImageProvider<CookidooRecipeInput>;
   }) {
     const logger = options.logger;
     const client = new CookidooClient({

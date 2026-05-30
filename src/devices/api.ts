@@ -3,6 +3,8 @@ import { createLogger, type SmartRecipeLogger } from "../logging/logger.js";
 import type { DeviceAdapter } from "./adapter.js";
 import { MonsieurCuisineAdapter } from "./mc/adapter.js";
 import { ThermomixAdapter } from "./tm/adapter.js";
+import type { AuthProvider } from "../mc/auth.js";
+import type { RecipeImageProvider } from "../pipeline/images.js";
 
 export type DeviceId = "mc" | "tm";
 
@@ -26,18 +28,18 @@ export interface GetRecipeOptions {
   public?: boolean;
 }
 
-export interface UploadRecipeOptions<TInput = any, TPayload = any> {
+export interface UploadRecipeOptions<TInput = unknown, TPayload = unknown> {
   cookie?: string;
   locale?: string;
   page: RetrievedRecipePage;
   recipeInput: TInput;
   payload?: TPayload;
-  imageProvider?: any;
-  authProvider?: any;
+  imageProvider?: RecipeImageProvider<TInput>;
+  authProvider?: AuthProvider;
   logger?: SmartRecipeLogger;
 }
 
-export class DeviceApi<TInput = any, TPayload = any> {
+export class DeviceApi<TInput = unknown, TPayload = unknown> {
   readonly id: DeviceId;
   readonly adapter: DeviceAdapter<TInput, TPayload>;
   readonly locale: string;
@@ -115,7 +117,7 @@ export class DeviceApi<TInput = any, TPayload = any> {
   }
 }
 
-export function createDeviceApi<TInput = any, TPayload = any>(
+export function createDeviceApi<TInput = unknown, TPayload = unknown>(
   options: DeviceApiOptions
 ): DeviceApi<TInput, TPayload> {
   return new DeviceApi<TInput, TPayload>(options);

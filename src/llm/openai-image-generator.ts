@@ -17,7 +17,7 @@ export interface OpenAIRecipeImageGeneratorOptions {
   logger?: SmartRecipeLogger;
 }
 
-export class OpenAIRecipeImageGenerator implements RecipeImageProvider {
+export class OpenAIRecipeImageGenerator implements RecipeImageProvider<RecipeInput> {
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly size: string;

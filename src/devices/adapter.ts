@@ -1,14 +1,24 @@
+import type { TSchema } from "typebox";
 import type { RetrievedRecipePage } from "../retriever/types.js";
+import type { AuthProvider } from "../mc/auth.js";
+import type { RecipeImageAsset, RecipeImageProvider } from "../pipeline/images.js";
 
-export interface DeviceAdapter<TInput = any, TPayload = any> {
+export type DevicePromptOptions = Record<string, unknown>;
+export interface RecipeUploadLogger {
+  info(object: unknown, message?: string): void;
+  warn(object: unknown, message?: string): void;
+  error(object: unknown, message?: string): void;
+}
+
+export interface DeviceAdapter<TInput = unknown, TPayload = unknown> {
   readonly id: "mc" | "tm";
   readonly deviceName: "MonsieurCuisine" | "Thermomix";
 
-  getSchema(options?: any): any;
-  getPromptInstructions(locale: string, options?: any): string;
-  validateInput(input: unknown): { ok: boolean; errors: string[] };
-  normalizeInput(input: any): any;
-  formatInputForTerminal(input: any): string;
+  getSchema(options?: DevicePromptOptions): TSchema;
+  getPromptInstructions(locale: string, options?: DevicePromptOptions): string;
+  validateInput(input: unknown): { ok: boolean; errors: string[]; formattedErrors?: string };
+  normalizeInput(input: TInput): TInput;
+  formatInputForTerminal(input: TInput): string;
 
   browserLogin(options: {
     locale?: string;
@@ -24,9 +34,9 @@ export interface DeviceAdapter<TInput = any, TPayload = any> {
     onStatus?: (message: string) => void;
   }): Promise<{ cookie: string; source: string; cookieNames: string[] }>;
 
-  getCurrentUser(cookie: string): Promise<any>;
-  listDrafts(options: { cookie: string; page?: number; size?: number }): Promise<any>;
-  getRecipe(options: { cookie: string; id: string; public?: boolean }): Promise<any>;
+  getCurrentUser(cookie: string): Promise<unknown>;
+  listDrafts(options: { cookie: string; page?: number; size?: number }): Promise<unknown>;
+  getRecipe(options: { cookie: string; id: string; public?: boolean }): Promise<unknown>;
 
   createPayload(input: TInput): TPayload;
 
@@ -36,14 +46,14 @@ export interface DeviceAdapter<TInput = any, TPayload = any> {
     page: RetrievedRecipePage;
     locale: string;
     cookie: string;
-    logger: any;
-    imageProvider?: any;
-    authProvider?: any;
+    logger: RecipeUploadLogger;
+    imageProvider?: RecipeImageProvider<TInput>;
+    authProvider?: AuthProvider;
   }): Promise<{
     recipeUrl?: string;
-    draft: any;
-    uploadedImage?: any;
-    recipeImage?: any;
+    draft: unknown;
+    uploadedImage?: unknown;
+    recipeImage?: Omit<RecipeImageAsset, "bytes"> & { bytes: number };
     payload: TPayload;
   }>;
 }

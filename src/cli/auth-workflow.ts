@@ -13,6 +13,13 @@ import {
   printSuccess,
   printWarning,
 } from "./terminal.js";
+import { withCliSpinner } from "./spinner.js";
+
+interface CapturedSession {
+  cookie: string;
+  source?: string;
+  cookieNames?: string[];
+}
 
 export async function resolveAuthInteractively(
   options: { cookie?: string },
@@ -110,13 +117,21 @@ async function tryPasswordLogin(
 
   const locale = (process.env.TM_LOCALE ?? "de-DE") as any;
   try {
-    printStatus("Signing in to Cookidoo without browser...");
-    const result = await adapter.passwordLogin({
-      locale,
-      credentials: { email, password },
-    });
+    const spinnerEnabled = options.promptForMissing && Boolean(process.stderr.isTTY);
+    const result = await withCliSpinner<CapturedSession>(
+      "Signing in to Cookidoo...",
+      spinnerEnabled,
+      () => adapter.passwordLogin({
+        locale,
+        credentials: { email, password },
+      }),
+      {
+        successMessage: "Signed in to Cookidoo.",
+        failureMessage: "Cookidoo sign-in failed.",
+      }
+    );
     await maybeSaveSessionCookie("TM_COOKIE", result.cookie, configPath, options.promptForMissing);
-    printStatus("Signed in to Cookidoo via OAuth redirect flow.");
+    if (!spinnerEnabled) printStatus("Signed in to Cookidoo via OAuth redirect flow.");
     return createAuthProvider(adapter, result.cookie);
   } catch {
     if (options.promptForMissing) {
@@ -132,21 +147,26 @@ async function trySilentSessionRefresh(adapter: any, configPath: string): Promis
 
   const locale = (process.env.TM_LOCALE ?? "de-DE") as any;
   try {
-    printStatus("Checking saved Cookidoo browser session silently...");
-    const result = await adapter.browserLogin({
-      locale,
-      headless: true,
-      timeoutMs: 8000,
-      installBrowsers: false,
-      browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
-      browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
-      browserSandbox: browserSandboxFromEnv(),
-      onStatus: () => undefined,
-    });
+    const spinnerEnabled = Boolean(process.stderr.isTTY);
+    const result = await withCliSpinner<CapturedSession>(
+      "Checking saved Cookidoo browser session...",
+      spinnerEnabled,
+      () => adapter.browserLogin({
+        locale,
+        headless: true,
+        timeoutMs: 8000,
+        installBrowsers: false,
+        browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
+        browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
+        browserSandbox: browserSandboxFromEnv(),
+        onStatus: () => undefined,
+      }),
+      { successMessage: "Refreshed Cookidoo session." }
+    );
     if (process.env.SAVE_SETTINGS !== "false") {
       upsertDotEnvValue(configPath, "TM_COOKIE", result.cookie);
     }
-    printStatus("Refreshed Cookidoo session from saved browser profile.");
+    if (!spinnerEnabled) printStatus("Refreshed Cookidoo session from saved browser profile.");
     return createAuthProvider(adapter, result.cookie);
   } catch {
     return null;
@@ -166,14 +186,23 @@ export async function attemptBrowserLogin(
 
   const locale = (process.env[localeKey] ?? "de-DE") as any;
   blankLine();
-  const result = await adapter.browserLogin({
-    locale,
-    browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
-    browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
-    browserSandbox: browserSandboxFromEnv(),
-    credentials: process.env[loginKey] ? { email: process.env[loginKey], password: process.env[pwKey] } : undefined,
-    onStatus: printStatus
-  });
+  const spinnerEnabled = isInteractive && Boolean(process.stderr.isTTY);
+  const result = await withCliSpinner<CapturedSession>(
+    `Opening ${adapter.deviceName} login browser...`,
+    spinnerEnabled,
+    (spinner) => adapter.browserLogin({
+      locale,
+      browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
+      browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
+      browserSandbox: browserSandboxFromEnv(),
+      credentials: process.env[loginKey] ? { email: process.env[loginKey], password: process.env[pwKey] } : undefined,
+      onStatus: spinnerEnabled ? (message: string) => spinner.update(message) : printStatus
+    }),
+    {
+      successMessage: `Captured ${adapter.deviceName} session.`,
+      failureMessage: `${adapter.deviceName} browser login failed.`,
+    }
+  );
 
   if (isInteractive) {
     blankLine();

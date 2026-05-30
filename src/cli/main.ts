@@ -18,6 +18,7 @@ import {
 import { retrieveRecipePage } from "../retriever/retriever.js";
 import type { RetrievedRecipePage } from "../retriever/types.js";
 import { createLogger } from "../logging/logger.js";
+import type { LogLevel } from "../logging/logger.js";
 import type { ReasoningEffort } from "../llm/types.js";
 export {
   cleanHtmlText,
@@ -64,12 +65,26 @@ import {
   printSuggestedCommand,
   summarizeImportResult
 } from "./output.js";
+import { withCliSpinner } from "./spinner.js";
 
 function detectDeviceFromRecipe(json: any): "mc" | "tm" {
   if (json && (typeof json.servingSize === "number" || Array.isArray(json.steps))) {
     return "tm";
   }
   return "mc";
+}
+
+function hasExplicitLogLevel(): boolean {
+  return Boolean(process.env.LOG_LEVEL) || process.argv.some((arg) => arg === "--log-level" || arg.startsWith("--log-level="));
+}
+
+function effectiveCliLogLevel(programOpts: any, isInteractive: boolean): LogLevel {
+  if (isInteractive && !hasExplicitLogLevel()) return "silent";
+  return programOpts.logLevel as LogLevel;
+}
+
+function useCliSpinner(programOpts: any, isInteractive: boolean): boolean {
+  return isInteractive && effectiveCliLogLevel(programOpts, isInteractive) === "silent";
 }
 
 // @types/marked-terminal is outdated and doesn't know that markedTerminal() now returns a MarkedExtension.
@@ -270,8 +285,10 @@ program
   .argument("<url>", "Recipe URL");
 addImportOptions(program.commands.at(-1)!);
 program.commands.at(-1)!.action(async (url, options) => {
+  const isJsonMode = Boolean(program.optsWithGlobals().json);
+  const isInteractive = !isJsonMode && process.stdout.isTTY && process.stdin.isTTY;
   const logger = createLogger({
-    level: program.optsWithGlobals().logLevel,
+    level: effectiveCliLogLevel(program.optsWithGlobals(), isInteractive),
     pretty: !program.optsWithGlobals().jsonLogs,
     destination: 2
   });
@@ -357,10 +374,11 @@ async function runImport(
 ) {
   const isJsonMode = Boolean(programOpts.json);
   const isInteractive = !isJsonMode && process.stdout.isTTY && process.stdin.isTTY;
+  const spinnerEnabled = useCliSpinner(programOpts, isInteractive);
   let wasPrompted = false;
 
   const logger = createLogger({
-    level: programOpts.logLevel,
+    level: effectiveCliLogLevel(programOpts, isInteractive),
     pretty: !programOpts.jsonLogs,
     destination: 2
   });
@@ -384,15 +402,23 @@ async function runImport(
   let imageMode = explicitImageMode(options);
   const excludeModes = resolveExcludedModes(targetDevice, options);
 
-  const generated: GenerateSmartRecipeResult = await generateSmartRecipe({
-    page,
-    locale: targetLocale,
-    openAIModel: options.model,
-    reasoningEffort: options.reasoning as ReasoningEffort,
-    excludeModes: excludeModes.length > 0 ? (excludeModes as any) : undefined,
-    logger,
-    adapter
-  });
+  const generated: GenerateSmartRecipeResult = await withCliSpinner(
+    "Generating recipe with OpenAI...",
+    spinnerEnabled,
+    () => generateSmartRecipe({
+      page,
+      locale: targetLocale,
+      openAIModel: options.model,
+      reasoningEffort: options.reasoning as ReasoningEffort,
+      excludeModes: excludeModes.length > 0 ? (excludeModes as any) : undefined,
+      logger,
+      adapter
+    }),
+    {
+      successMessage: "Generated recipe draft.",
+      failureMessage: "Recipe generation failed.",
+    }
+  );
 
   // ── Step 3: Display the recipe ────────────────────────────────────────────
   if (!isJsonMode) {
@@ -418,7 +444,7 @@ async function runImport(
     return;
   }
 
-  const imageResult = await resolveImageProvider(imageMode, generated, isInteractive, options, logger);
+  const imageResult = await resolveImageProvider(imageMode, generated, isInteractive, options, logger, spinnerEnabled);
   imageMode = imageResult.imageMode;
   wasPrompted = wasPrompted || imageResult.prompted;
   const imageProvider = imageResult.imageProvider;
@@ -684,7 +710,7 @@ async function buildDoctorReport(device: "mc" | "tm", options: any) {
     try {
       const user = await adapter.getCurrentUser(cookie);
       report.auth.ok = true;
-      report.auth.userId = user?.id;
+      report.auth.userId = user && typeof user === "object" && "id" in user ? user.id : undefined;
     } catch (error: any) {
       report.auth.ok = false;
       report.auth.message = error?.message || String(error);
@@ -770,19 +796,28 @@ program
       password: options.password ?? process.env[pwKey]
     } : undefined;
 
-    const result = await adapter.browserLogin({
-      locale,
-      userDataDir: options.profileDir,
-      startUrl: options.startUrl,
-      timeoutMs: Number(options.timeout) * 1000,
-      keepOpen: options.keepOpen,
-      installBrowsers: options.installBrowser,
-      browserChannel: options.browserChannel ?? process.env.SMART_RECIPE_BROWSER_CHANNEL,
-      browserPath: options.browserPath ?? process.env.SMART_RECIPE_BROWSER_PATH,
-      browserSandbox: options.disableBrowserSandbox ? false : browserSandboxFromEnv(),
-      credentials,
-      onStatus: printStatus
-    } as any);
+    const spinnerEnabled = Boolean(process.stderr.isTTY && !program.optsWithGlobals().json);
+    const result = await withCliSpinner(
+      `Opening ${adapter.deviceName} login browser...`,
+      spinnerEnabled,
+      (spinner) => adapter.browserLogin({
+        locale,
+        userDataDir: options.profileDir,
+        startUrl: options.startUrl,
+        timeoutMs: Number(options.timeout) * 1000,
+        keepOpen: options.keepOpen,
+        installBrowsers: options.installBrowser,
+        browserChannel: options.browserChannel ?? process.env.SMART_RECIPE_BROWSER_CHANNEL,
+        browserPath: options.browserPath ?? process.env.SMART_RECIPE_BROWSER_PATH,
+        browserSandbox: options.disableBrowserSandbox ? false : browserSandboxFromEnv(),
+        credentials,
+        onStatus: spinnerEnabled ? (message: string) => spinner.update(message) : printStatus
+      } as any),
+      {
+        successMessage: `Captured ${adapter.deviceName} session.`,
+        failureMessage: `${adapter.deviceName} browser login failed.`,
+      }
+    );
 
     if (options.save) {
       upsertDotEnvValue(GLOBAL_ENV_PATH, cookieKey, result.cookie);
@@ -835,13 +870,22 @@ program
         });
         if (!shouldOpen) throw error;
 
-        const loginResult = await adapter.browserLogin({
-          locale: sourceDevice === "tm" ? (process.env.TM_LOCALE ?? "de-DE") : (process.env.MC_LOCALE ?? "de-DE"),
-          browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
-          browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
-          browserSandbox: browserSandboxFromEnv(),
-          onStatus: printStatus,
-        } as any);
+        const spinnerEnabled = Boolean(process.stderr.isTTY);
+        const loginResult = await withCliSpinner(
+          `Opening ${adapter.deviceName} login browser...`,
+          spinnerEnabled,
+          (spinner) => adapter.browserLogin({
+            locale: sourceDevice === "tm" ? (process.env.TM_LOCALE ?? "de-DE") : (process.env.MC_LOCALE ?? "de-DE"),
+            browserChannel: process.env.SMART_RECIPE_BROWSER_CHANNEL,
+            browserPath: process.env.SMART_RECIPE_BROWSER_PATH,
+            browserSandbox: browserSandboxFromEnv(),
+            onStatus: spinnerEnabled ? (message: string) => spinner.update(message) : printStatus,
+          } as any),
+          {
+            successMessage: `Captured ${adapter.deviceName} session.`,
+            failureMessage: `${adapter.deviceName} browser login failed.`,
+          }
+        );
 
         const refreshedCookies = {
           ...sourceOptions.cookies,
