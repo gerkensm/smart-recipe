@@ -6,7 +6,7 @@ import { CookidooRecipeInputSchema, type CookidooRecipeInput } from "./schema.js
 import { createCookidooMetaPatch, createCookidooInstructions, getImageDimensions } from "./payload.js";
 import { buildCookidooRecipeInstructions } from "./prompts.js";
 import { browserLoginForCookidoo } from "./browser-login.js";
-import { CookidooClient } from "./client.js";
+import { COOKIDOO_IMAGE_UPLOAD_PRESET, CookidooClient } from "./client.js";
 import { RetrievedRecipeImageProvider } from "../../pipeline/images.js";
 import { extractJsonLd, findRecipeObjects } from "../../retriever/json-ld.js";
 
@@ -359,6 +359,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
           timestamp,
           source: "uw",
           customCoordinates,
+          uploadPreset: COOKIDOO_IMAGE_UPLOAD_PRESET,
         });
 
         logger.info({ signature }, "uploading to Cloudinary");
@@ -419,11 +420,12 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
       }
     }
 
-    if (!draft || !draft.recipeId) {
+    const recipeId = extractCreatedRecipeId(draft);
+    if (!recipeId) {
+      logger.error({ draft }, "Cookidoo copy response did not include a recipe ID");
       throw new Error("Failed to copy public recipe draft. No recipe ID returned.");
     }
 
-    const recipeId = draft.recipeId;
     const metaPatch = createCookidooMetaPatch(options.recipeInput);
     if (uploadedImage) {
       metaPatch.image = `${uploadedImage.public_id}.${uploadedImage.format}`;
@@ -463,4 +465,21 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
       },
     };
   }
+}
+
+function extractCreatedRecipeId(response: any): string | undefined {
+  const candidates = [
+    response?.recipeId,
+    response?.id,
+    response?.recipe?.recipeId,
+    response?.recipe?.id,
+    response?.data?.recipeId,
+    response?.data?.id,
+    response?.data?.recipe?.recipeId,
+    response?.data?.recipe?.id,
+    response?.createdRecipe?.recipeId,
+    response?.createdRecipe?.id,
+  ];
+  const value = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  return value?.trim();
 }

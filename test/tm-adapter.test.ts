@@ -513,6 +513,38 @@ describe("ThermomixAdapter", () => {
 
       await expect(uploadPromise).rejects.toThrow(CookidooRateLimitError);
     });
+
+    it("accepts nested Cookidoo copy responses when extracting the new draft ID", async () => {
+      const mockRequest = vi.spyOn(CookidooClient.prototype, "request");
+      mockRequest.mockResolvedValueOnce({ data: { recipe: { recipeId: "nested-draft-id-123" } } });
+      mockRequest.mockResolvedValueOnce({ success: true });
+      mockRequest.mockResolvedValueOnce({ success: true });
+
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn()
+      };
+
+      const result = await adapter.upload({
+        payload: adapter.createPayload(sampleInput),
+        recipeInput: sampleInput,
+        page: {
+          url: "https://example.com/recipe",
+          finalUrl: "https://example.com/recipe",
+          title: "Test Recipe",
+          markdown: "",
+          html: "",
+          images: []
+        },
+        locale: "de-DE",
+        cookie: "_oauth2_proxy=foo; v-authenticated=bar; v-is-authenticated=true",
+        logger
+      });
+
+      expect(result.draft.id).toBe("nested-draft-id-123");
+      expect(result.recipeUrl).toBe("https://cookidoo.de/created-recipes/de-DE/nested-draft-id-123");
+    });
   });
 
   describe("Image Upload & Dimensions Parsing", () => {
@@ -653,6 +685,37 @@ describe("ThermomixAdapter", () => {
         format: "png",
       });
       expect(result.recipeUrl).toBe("https://cookidoo.de/created-recipes/de-DE/draft-recipe-id-999");
+    });
+
+    it("extracts nested image signatures and signs the Cloudinary upload preset", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: { signature: "nested-sig-123" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      ) as unknown as typeof fetch;
+      const client = new CookidooClient({
+        cookie: "_oauth2_proxy=foo",
+        locale: "de-DE",
+        fetch: fetchImpl,
+      });
+
+      const result = await client.requestImageSignature({
+        timestamp: 1234567890,
+        source: "uw",
+        customCoordinates: "0,0,1024,1024",
+      });
+
+      expect(result.signature).toBe("nested-sig-123");
+      const [, init] = (fetchImpl as any).mock.calls[0];
+      expect(JSON.parse(init.body)).toEqual(
+        expect.objectContaining({
+          custom_coordinates: "0,0,1024,1024",
+          source: "uw",
+          timestamp: 1234567890,
+          upload_preset: "prod-customer-recipe-signed",
+        })
+      );
     });
   });
 });

@@ -147,6 +147,7 @@ export class CookidooApi {
     timestamp: number;
     source: string;
     customCoordinates: string;
+    uploadPreset?: string;
   }): Promise<{ signature: string }> {
     return this.client.requestImageSignature(options);
   }

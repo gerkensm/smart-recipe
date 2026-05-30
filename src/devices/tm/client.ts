@@ -30,6 +30,7 @@ export function getLocalization(locale: string): Localization {
 }
 
 export const FULL_VIEW_ACCEPT = "application/vnd.vorwerk.customer-recipe.full+json";
+export const COOKIDOO_IMAGE_UPLOAD_PRESET = "prod-customer-recipe-signed";
 
 export interface CookidooRequestOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
@@ -94,8 +95,9 @@ export class CookidooClient {
     timestamp: number;
     source: string;
     customCoordinates: string;
+    uploadPreset?: string;
   }): Promise<{ signature: string }> {
-    return this.request<{ signature: string }>({
+    const response = await this.request<unknown>({
       method: "POST",
       path: `/created-recipes/${this.language}/image/signature`,
       headers: {
@@ -105,8 +107,20 @@ export class CookidooClient {
         timestamp: options.timestamp,
         source: options.source,
         custom_coordinates: options.customCoordinates,
+        upload_preset: options.uploadPreset ?? COOKIDOO_IMAGE_UPLOAD_PRESET,
       },
     });
+    const signature = extractImageSignature(response);
+    if (!signature) {
+      throw new CookidooError({
+        message: "Cookidoo image signature response did not include a usable signature",
+        status: 502,
+        body: response,
+        url: `/created-recipes/${this.language}/image/signature`,
+        method: "POST",
+      });
+    }
+    return { signature };
   }
 
   async uploadImageToCloudinary(options: {
@@ -117,6 +131,15 @@ export class CookidooClient {
     source: string;
     customCoordinates: string;
   }): Promise<{ public_id: string; format: string }> {
+    if (!options.signature) {
+      throw new CookidooError({
+        message: "Cannot upload image to Cloudinary without a Cookidoo signature",
+        status: 0,
+        body: undefined,
+        url: "https://api-eu.cloudinary.com/v1_1/vorwerk-users-gc/image/upload",
+        method: "POST",
+      });
+    }
     const formData = new FormData();
     const blob = new Blob([options.fileBytes as any], { type: options.mimeType });
     formData.append("file", blob, "image.jpg");
@@ -125,9 +148,7 @@ export class CookidooClient {
     formData.append("signature", options.signature);
     formData.append("source", options.source);
     formData.append("custom_coordinates", options.customCoordinates);
-    // upload_preset is excluded from the signature (invalid-signature-params) but must
-    // still be sent so Cloudinary applies the correct signed preset configuration.
-    formData.append("upload_preset", "prod-customer-recipe-signed");
+    formData.append("upload_preset", COOKIDOO_IMAGE_UPLOAD_PRESET);
 
     const res = await this.fetchImpl("https://api-eu.cloudinary.com/v1_1/vorwerk-users-gc/image/upload", {
       method: "POST",
@@ -149,6 +170,22 @@ export class CookidooClient {
 
     return parsed as { public_id: string; format: string };
   }
+}
+
+function extractImageSignature(response: unknown): string | undefined {
+  if (typeof response === "string") return response.trim() || undefined;
+  if (!response || typeof response !== "object") return undefined;
+
+  const candidates = [
+    (response as any).signature,
+    (response as any).data?.signature,
+    (response as any).result?.signature,
+    (response as any).payload?.signature,
+    (response as any).signature?.signature,
+    (response as any).data,
+  ];
+
+  return candidates.find((value) => typeof value === "string" && value.trim())?.trim();
 }
 
 
