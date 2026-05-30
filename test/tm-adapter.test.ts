@@ -5,6 +5,7 @@ import { CookidooClient } from "../src/devices/tm/client.js";
 import { CookidooAuthError, CookidooRateLimitError } from "../src/devices/tm/errors.js";
 import type { CookidooRecipeInput } from "../src/devices/tm/schema.js";
 import { getImageDimensions } from "../src/devices/tm/payload.js";
+import { passwordLoginForCookidoo } from "../src/devices/tm/browser-login.js";
 
 
 const sampleInput: CookidooRecipeInput = {
@@ -741,4 +742,75 @@ describe("ThermomixAdapter", () => {
       })).rejects.toThrow(CookidooAuthError);
     });
   });
+
+  describe("Cookidoo browserless OAuth login", () => {
+    it("follows the redirect flow, posts credentials, and returns Cookidoo session cookies", async () => {
+      const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const href = String(url);
+        const method = init?.method ?? "GET";
+
+        if (href === "https://cookidoo.de/profile/de-DE/login?redirectAfterLogin=%2Ffoundation%2Fde-DE%2Ffor-you") {
+          return redirectResponse("https://cookidoo.de/oauth2/start?market=de&ui_locales=de-DE&rd=%2Ffoundation%2Fde-DE%2Ffor-you");
+        }
+        if (href.startsWith("https://cookidoo.de/oauth2/start")) {
+          return redirectResponse("https://ciam.prod.cookidoo.vorwerk-digital.com/authz-srv/authz?client_id=tmde2-live-v1&state=state-123");
+        }
+        if (href.startsWith("https://ciam.prod.cookidoo.vorwerk-digital.com/authz-srv/authz")) {
+          return redirectResponse("https://eu.login.vorwerk.com/ciam/login?requestId=request-from-url&view_type=login");
+        }
+        if (href.startsWith("https://eu.login.vorwerk.com/ciam/login")) {
+          return new Response('<form><input type="hidden" name="requestId" value="request-123"></form>', {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          });
+        }
+        if (href === "https://ciam.prod.cookidoo.vorwerk-digital.com/login-srv/login" && method === "POST") {
+          return redirectResponse("https://cookidoo.de/oauth2/callback?code=auth-code&state=state-123", {
+            "set-cookie": "cidaas_sid=sid; Domain=ciam.prod.cookidoo.vorwerk-digital.com; Path=/",
+          });
+        }
+        if (href.startsWith("https://cookidoo.de/oauth2/callback")) {
+          return redirectResponse("/foundation/de-DE/for-you", {
+            "set-cookie": "_oauth2_proxy=session; Domain=cookidoo.de; Path=/, v-authenticated=sig; Domain=cookidoo.de; Path=/, v-is-authenticated=true; Domain=cookidoo.de; Path=/",
+          });
+        }
+        if (href === "https://cookidoo.de/foundation/de-DE/for-you") {
+          return new Response("ok", { status: 200 });
+        }
+
+        throw new Error(`Unexpected request: ${method} ${href}`);
+      }) as unknown as typeof fetch;
+
+      const result = await passwordLoginForCookidoo({
+        locale: "de-DE",
+        credentials: {
+          email: "cook@example.test",
+          password: "secret",
+        },
+        fetch: fetchImpl,
+      });
+
+      expect(result).toEqual({
+        cookie: "_oauth2_proxy=session; v-authenticated=sig; v-is-authenticated=true",
+        source: "cookidoo-password",
+        cookieNames: ["_oauth2_proxy", "cidaas_sid", "v-authenticated", "v-is-authenticated"],
+      });
+
+      const [, postInit] = (fetchImpl as any).mock.calls.find(([url, init]: [string, RequestInit]) =>
+        String(url) === "https://ciam.prod.cookidoo.vorwerk-digital.com/login-srv/login" && init?.method === "POST"
+      );
+      expect(String(postInit.body)).toBe("requestId=request-123&username=cook%40example.test&password=secret");
+      expect(new Headers(postInit.headers).get("Referer")).toBe("https://eu.login.vorwerk.com/ciam/login?requestId=request-from-url&view_type=login");
+    });
+  });
 });
+
+function redirectResponse(location: string, headers: Record<string, string> = {}): Response {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location,
+      ...headers,
+    },
+  });
+}

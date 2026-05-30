@@ -5,6 +5,7 @@ import { OpenAIRecipeImageGenerator } from "../llm/openai-image-generator.js";
 import { NullImageProvider } from "../pipeline/images.js";
 import type { SmartRecipeLogger } from "../logging/logger.js";
 import { confirm, password, select } from "./prompts.js";
+import { blankLine, colorCyan, colorDim, printSuccess, printWarning } from "./terminal.js";
 
 export type RecipeImageMode = "generate" | "generate-with-sources" | "skip" | "none";
 
@@ -23,7 +24,7 @@ export async function resolveTargetDeviceSettings(
   if (!process.env.TARGET_DEVICE && !options.device) {
     if (isInteractive) {
       prompted = true;
-      console.log();
+      blankLine();
       device = await selectTargetDevice();
       await promptAndPersistInitialDeviceSettings(device, configPath);
     } else {
@@ -47,10 +48,10 @@ export async function ensureOpenAIKey(isInteractive: boolean, configPath: string
     throw new Error("OPENAI_API_KEY is not set. Provide it via the environment or run interactively.");
   }
 
-  console.log();
-  console.log("  \x1b[1m\x1b[33m⚠  No OpenAI API key found.\x1b[0m");
-  console.log("  You can get one at \x1b[36mhttps://platform.openai.com/api-keys\x1b[0m");
-  console.log();
+  blankLine();
+  printWarning("No OpenAI API key found.");
+  console.log(`  You can get one at ${colorCyan("https://platform.openai.com/api-keys")}`);
+  blankLine();
 
   const apiKey = await password({
     message: "  Paste your OpenAI API key",
@@ -69,7 +70,8 @@ export async function ensureOpenAIKey(isInteractive: boolean, configPath: string
   });
   if (saveKey) {
     upsertDotEnvValue(configPath, "OPENAI_API_KEY", apiKey.trim());
-    console.log(`  \x1b[32m✓ Saved to ${configPath}\x1b[0m\n`);
+    printSuccess(`Saved to ${configPath}`);
+    blankLine();
   } else {
     process.env.SAVE_SETTINGS = "false";
   }
@@ -108,7 +110,7 @@ export async function decideUpload(
   if (options.alwaysUpload) return { shouldUpload: true, prompted: false };
   if (!isInteractive) return { shouldUpload: false, prompted: false };
 
-  console.log();
+  blankLine();
   return {
     prompted: true,
     shouldUpload: await confirm({
@@ -182,7 +184,8 @@ async function promptAndPersistInitialDeviceSettings(device: "mc" | "tm", config
     if (hasFoodProcessor !== undefined) {
       upsertDotEnvValue(configPath, "MC_HAS_FOOD_PROCESSOR", String(hasFoodProcessor));
     }
-    console.log(`✓ Saved device settings to ${configPath}\n`);
+    printSuccess(`Saved device settings to ${configPath}`);
+    blankLine();
   } else {
     process.env.SAVE_SETTINGS = "false";
   }
@@ -223,7 +226,8 @@ async function ensureThermomixVersion(isInteractive: boolean, configPath: string
   });
   if (saveSettings) {
     upsertDotEnvValue(configPath, "TM_VERSION", tmVersion);
-    console.log(`✓ Saved TM_VERSION to ${configPath}\n`);
+    printSuccess(`Saved TM_VERSION to ${configPath}`);
+    blankLine();
   } else {
     process.env.SAVE_SETTINGS = "false";
   }
@@ -243,7 +247,8 @@ async function ensureMcFoodProcessorSetting(isInteractive: boolean, configPath: 
   });
   if (saveSettings) {
     upsertDotEnvValue(configPath, "MC_HAS_FOOD_PROCESSOR", String(hasFoodProcessor));
-    console.log(`✓ Saved MC_HAS_FOOD_PROCESSOR to ${configPath}\n`);
+    printSuccess(`Saved MC_HAS_FOOD_PROCESSOR to ${configPath}`);
+    blankLine();
   } else {
     process.env.SAVE_SETTINGS = "false";
   }
@@ -267,10 +272,10 @@ async function resolveImageMode(
 
   const sourceImageCount = generated.page.images?.filter((img: any) => img.score >= 0.5).length ?? 0;
   const sourceHint = sourceImageCount > 0
-    ? `  \x1b[2m(${sourceImageCount} potential recipe image${sourceImageCount !== 1 ? "s" : ""} found on the source page)\x1b[0m`
-    : `  \x1b[2m(no suitable source images found on the page)\x1b[0m`;
+    ? `  ${colorDim(`(${sourceImageCount} potential recipe image${sourceImageCount !== 1 ? "s" : ""} found on the source page)`)}`
+    : `  ${colorDim("(no suitable source images found on the page)")}`;
   console.log(sourceHint);
-  console.log();
+  blankLine();
 
   return await select<RecipeImageMode>({
     message: "  Recipe image?",

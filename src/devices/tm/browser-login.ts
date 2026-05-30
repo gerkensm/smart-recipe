@@ -27,8 +27,17 @@ export interface BrowserLoginOptions {
 
 export interface BrowserLoginResult {
   cookie: string;
-  source: "cookidoo-browser";
+  source: "cookidoo-browser" | "cookidoo-password";
   cookieNames: string[];
+}
+
+export interface PasswordLoginOptions {
+  locale?: string;
+  credentials: {
+    email: string;
+    password: string;
+  };
+  fetch?: typeof fetch;
 }
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -129,6 +138,58 @@ export async function browserLoginForCookidoo(options: BrowserLoginOptions = {})
   }
 }
 
+export async function passwordLoginForCookidoo(options: PasswordLoginOptions): Promise<BrowserLoginResult> {
+  const locale = options.locale ?? "de-DE";
+  const { domain, langPath } = getLocaleDomainMapping(locale);
+  const fetchImpl = options.fetch ?? fetch;
+  const jar = new SimpleCookieJar();
+  const startUrl = `https://${domain}/profile/${langPath}/login?redirectAfterLogin=%2Ffoundation%2F${langPath}%2Ffor-you`;
+
+  const loginPage = await fetchWithRedirects(fetchImpl, jar, startUrl);
+  const existingCookie = jar.cookidooAuthHeader(domain);
+  if (existingCookie) {
+    return {
+      cookie: existingCookie,
+      source: "cookidoo-password",
+      cookieNames: jar.cookieNames(),
+    };
+  }
+
+  const requestId = extractCookidooRequestId(loginPage.body);
+
+  const form = new URLSearchParams({
+    requestId,
+    username: options.credentials.email,
+    password: options.credentials.password,
+  });
+
+  await fetchWithRedirects(fetchImpl, jar, "https://ciam.prod.cookidoo.vorwerk-digital.com/login-srv/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Referer: loginPage.url,
+    },
+    body: form,
+  });
+
+  const cookie = jar.cookidooAuthHeader(domain);
+  if (!cookie) {
+    throw new CookidooError({
+      message: "Cookidoo password login did not return authenticated session cookies.",
+      status: 401,
+      body: { cookieNames: jar.cookieNames() },
+      url: startUrl,
+      method: "POST",
+    });
+  }
+
+  return {
+    cookie,
+    source: "cookidoo-password",
+    cookieNames: jar.cookieNames(),
+  };
+}
+
 async function launchChromiumApp(options: {
   userDataDir: string;
   startUrl: string;
@@ -214,6 +275,161 @@ async function autoFillCookidooLoginForm(
       await emailInput.press("Enter");
     }
   }
+}
+
+async function fetchWithRedirects(
+  fetchImpl: typeof fetch,
+  jar: SimpleCookieJar,
+  url: string,
+  init: RequestInit = {},
+  maxRedirects = 12
+): Promise<{ url: string; status: number; body: string }> {
+  let currentUrl = url;
+  let currentInit = init;
+
+  for (let redirects = 0; redirects <= maxRedirects; redirects += 1) {
+    const headers = new Headers(currentInit.headers);
+    const cookie = jar.headerForUrl(currentUrl);
+    if (cookie) headers.set("Cookie", cookie);
+    if (!headers.has("User-Agent")) {
+      headers.set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+    }
+
+    const res = await fetchImpl(currentUrl, {
+      ...currentInit,
+      headers,
+      redirect: "manual",
+    });
+    jar.storeFromResponse(currentUrl, res.headers);
+
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      if (!location) {
+        throw new CookidooError({
+          message: `Cookidoo login redirect missing Location header [${res.status}]`,
+          status: res.status,
+          body: undefined,
+          url: currentUrl,
+          method: currentInit.method ?? "GET",
+        });
+      }
+      currentUrl = new URL(location, currentUrl).toString();
+      currentInit = { method: "GET" };
+      continue;
+    }
+
+    return {
+      url: currentUrl,
+      status: res.status,
+      body: await res.text(),
+    };
+  }
+
+  throw new CookidooError({
+    message: "Cookidoo login exceeded maximum redirects.",
+    status: 0,
+    body: undefined,
+    url,
+    method: init.method ?? "GET",
+  });
+}
+
+function extractCookidooRequestId(html: string): string {
+  const match =
+    html.match(/name=["']requestId["'][^>]*value=["']([^"']+)["']/i) ??
+    html.match(/value=["']([^"']+)["'][^>]*name=["']requestId["']/i);
+  const requestId = match?.[1]?.trim();
+  if (!requestId) {
+    throw new CookidooError({
+      message: "Could not extract Cookidoo login requestId from CIAM login page.",
+      status: 0,
+      body: html.slice(0, 500),
+      url: "https://ciam.prod.cookidoo.vorwerk-digital.com/login-srv/login",
+      method: "GET",
+    });
+  }
+  return requestId;
+}
+
+class SimpleCookieJar {
+  private readonly cookies = new Map<string, { name: string; value: string; domain: string; path: string }>();
+
+  storeFromResponse(url: string, headers: Headers): void {
+    const origin = new URL(url);
+    for (const header of getSetCookieHeaders(headers)) {
+      const parsed = parseSetCookie(header, origin.hostname);
+      if (!parsed) continue;
+      const key = `${parsed.domain}|${parsed.path}|${parsed.name}`;
+      if (!parsed.value) {
+        this.cookies.delete(key);
+      } else {
+        this.cookies.set(key, parsed);
+      }
+    }
+  }
+
+  headerForUrl(url: string): string {
+    const target = new URL(url);
+    const values = [...this.cookies.values()]
+      .filter((cookie) => domainMatches(target.hostname, cookie.domain) && target.pathname.startsWith(cookie.path))
+      .map((cookie) => `${cookie.name}=${cookie.value}`);
+    return values.join("; ");
+  }
+
+  cookidooAuthHeader(domain: string): string | undefined {
+    const values = [...this.cookies.values()].filter((cookie) => domainMatches(domain, cookie.domain));
+    const oauth2Proxy = values.find((cookie) => cookie.name === "_oauth2_proxy");
+    const vAuthenticated = values.find((cookie) => cookie.name === "v-authenticated");
+    const vIsAuthenticated = values.find((cookie) => cookie.name === "v-is-authenticated");
+    if (!oauth2Proxy || !vAuthenticated) return undefined;
+    return [
+      `_oauth2_proxy=${oauth2Proxy.value}`,
+      `v-authenticated=${vAuthenticated.value}`,
+      `v-is-authenticated=${vIsAuthenticated?.value ?? "true"}`,
+    ].join("; ");
+  }
+
+  cookieNames(): string[] {
+    return [...this.cookies.values()].map((cookie) => cookie.name).sort();
+  }
+}
+
+function getSetCookieHeaders(headers: Headers): string[] {
+  const getSetCookie = (headers as any).getSetCookie;
+  if (typeof getSetCookie === "function") {
+    return getSetCookie.call(headers).flatMap((header: string) => splitCombinedSetCookie(header));
+  }
+  const combined = headers.get("set-cookie");
+  return combined ? splitCombinedSetCookie(combined) : [];
+}
+
+function splitCombinedSetCookie(header: string): string[] {
+  return header.split(/,(?=\s*[^;,=\s]+=[^;,]+)/g).map((part) => part.trim()).filter(Boolean);
+}
+
+function parseSetCookie(header: string, fallbackDomain: string): { name: string; value: string; domain: string; path: string } | null {
+  const parts = header.split(";").map((part) => part.trim());
+  const [nameValue, ...attributes] = parts;
+  const eq = nameValue.indexOf("=");
+  if (eq <= 0) return null;
+  const name = nameValue.slice(0, eq);
+  const value = nameValue.slice(eq + 1);
+  let domain = fallbackDomain;
+  let path = "/";
+  for (const attr of attributes) {
+    const [rawKey, ...rawVal] = attr.split("=");
+    const key = rawKey.trim().toLowerCase();
+    const val = rawVal.join("=").trim();
+    if (key === "domain" && val) domain = val.replace(/^\./, "");
+    if (key === "path" && val) path = val;
+  }
+  return { name, value, domain, path };
+}
+
+function domainMatches(host: string, cookieDomain: string): boolean {
+  const normalizedHost = host.toLowerCase();
+  const normalizedCookieDomain = cookieDomain.replace(/^\./, "").toLowerCase();
+  return normalizedHost === normalizedCookieDomain || normalizedHost.endsWith(`.${normalizedCookieDomain}`);
 }
 
 async function waitForCookidooCookies(

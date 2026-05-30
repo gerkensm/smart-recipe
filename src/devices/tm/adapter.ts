@@ -5,7 +5,7 @@ import type { RetrievedRecipePage } from "../../retriever/types.js";
 import { CookidooRecipeInputSchema, type CookidooRecipeInput } from "./schema.js";
 import { createCookidooMetaPatch, createCookidooInstructions, getImageDimensions } from "./payload.js";
 import { buildCookidooRecipeInstructions } from "./prompts.js";
-import { browserLoginForCookidoo } from "./browser-login.js";
+import { browserLoginForCookidoo, passwordLoginForCookidoo } from "./browser-login.js";
 import { COOKIDOO_IMAGE_UPLOAD_PRESET, CookidooClient } from "./client.js";
 import { RetrievedRecipeImageProvider } from "../../pipeline/images.js";
 import { extractJsonLd, findRecipeObjects } from "../../retriever/json-ld.js";
@@ -231,6 +231,21 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, any>
       installBrowsers: options.installBrowsers,
       credentials: options.credentials,
       onStatus: options.onStatus,
+    });
+    return {
+      cookie: result.cookie,
+      source: result.source,
+      cookieNames: result.cookieNames,
+    };
+  }
+
+  async passwordLogin(options: {
+    locale?: string;
+    credentials: { email: string; password: string };
+  }) {
+    const result = await passwordLoginForCookidoo({
+      locale: options.locale,
+      credentials: options.credentials,
     });
     return {
       cookie: result.cookie,

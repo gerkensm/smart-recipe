@@ -2,6 +2,7 @@ import process from "node:process";
 import { AuthFlowError, MonsieurCuisineApiError } from "../mc/errors.js";
 import { CookidooError } from "../devices/tm/errors.js";
 import type { importRecipeFromUrl } from "../pipeline/import-url.js";
+import { colorCyan, colorDim } from "./terminal.js";
 
 export function printOutput(value: any, isJson: boolean, customFormat?: (val: any) => string): void {
   if (isJson) {
@@ -65,8 +66,8 @@ export function printSuggestedCommand(
   if (suggestedFlags.length > 0) {
     const quote = (val: string) => val.includes(" ") ? `"${val}"` : val;
     const cmdStr = ["smart-recipe", ...cmdArgs.map(quote), ...suggestedFlags].join(" ");
-    console.log(`\n  \x1b[2mNext time, in order to pick these settings, execute with:\x1b[0m`);
-    console.log(`  \x1b[36m$ ${cmdStr}\x1b[0m\n`);
+    console.log(`\n  ${colorDim("Next time, in order to pick these settings, execute with:")}`);
+    console.log(`  ${colorCyan(`$ ${cmdStr}`)}\n`);
   }
 }
 

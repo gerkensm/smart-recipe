@@ -37,8 +37,9 @@ export { formatDraftsForTerminal, formatUserForTerminal } from "./formatters.js"
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import { detectRecipeSource, fetchRecipeSourceAsPage, fetchRecipeSourceWithRaw, type RecipeSource } from "../sources/index.js";
-import { confirm } from "./prompts.js";
+import { confirm, input, password as passwordPrompt } from "./prompts.js";
 import { resolveAuthInteractively } from "./auth-workflow.js";
+import { blankLine, colorDim, printError, printHeading, printStatus, printSuccess } from "./terminal.js";
 import {
   decideUpload,
   ensureOpenAIKey,
@@ -404,7 +405,9 @@ async function runImport(
 
   if (!shouldUpload) {
     if (!isJsonMode) {
-      console.log("\n  \x1b[2m(Skipped upload. Run with --always-upload to always upload.)\x1b[0m\n");
+      blankLine();
+      console.log(`  ${colorDim("(Skipped upload. Run with --always-upload to always upload.)")}`);
+      blankLine();
     }
     printOutput(
       { title: generated.recipeInput.title, recipeInput: generated.recipeInput, payload: generated.payload },
@@ -450,7 +453,8 @@ async function runImport(
         (error.status === 401 || error.status === 403));
 
     if (isInteractive && isExpiredToken) {
-      console.log(`\n  \x1b[31m✗ ${adapter.deviceName} session has expired or is invalid.\x1b[0m`);
+      blankLine();
+      printError(`${adapter.deviceName} session has expired or is invalid.`);
       console.log("  Please authenticate to obtain a new session.");
 
       // Clear current expired session cookies to force fresh interactive auth
@@ -568,6 +572,69 @@ function requireCookieForDevice(device: "mc" | "tm", options: any): string {
   return cookie;
 }
 
+async function resolveCookieForDevice(device: "mc" | "tm", options: any): Promise<string> {
+  const existingCookie = activeCookieForDevice(device, options);
+  if (existingCookie) return existingCookie;
+
+  const adapter = getDeviceAdapter(device) as any;
+  if (device === "tm" && typeof adapter.passwordLogin === "function") {
+    let email = process.env.TM_LOGIN;
+    let cookidooPassword = process.env.TM_PW;
+    blankLine();
+    printHeading("Sign in to Cookidoo without opening a browser");
+    if (!email) {
+      email = await input({
+        message: "  Cookidoo email",
+        validate: (value) => (value.trim() ? true : "Email cannot be empty."),
+      });
+    }
+    if (!cookidooPassword) {
+      cookidooPassword = await passwordPrompt({
+        message: "  Cookidoo password",
+        mask: "*",
+        validate: (value) => (value ? true : "Password cannot be empty."),
+      });
+    }
+
+    printStatus("Signing in to Cookidoo without browser...");
+    const result = await adapter.passwordLogin({
+      locale: getTmLocale("de-DE"),
+      credentials: {
+        email,
+        password: cookidooPassword,
+      },
+    });
+    process.env.TM_COOKIE = result.cookie;
+    if (process.env.SAVE_SETTINGS !== "false" && await shouldSaveGeneratedCookie()) {
+      upsertDotEnvValue(GLOBAL_ENV_PATH, "TM_COOKIE", result.cookie);
+      if (isInteractiveTerminal()) {
+        printSuccess(`Saved TM_COOKIE to ${GLOBAL_ENV_PATH}`);
+        blankLine();
+      }
+    }
+    printStatus("Signed in to Cookidoo via OAuth redirect flow.");
+    return result.cookie;
+  }
+
+  return requireCookieForDevice(device, options);
+}
+
+async function shouldSaveGeneratedCookie(): Promise<boolean> {
+  if (!isInteractiveTerminal()) return true;
+  const saveCookie = await confirm({
+    message: "  Save this session cookie to ~/.smart-recipe?",
+    default: true,
+  });
+  if (!saveCookie) {
+    process.env.SAVE_SETTINGS = "false";
+  }
+  return saveCookie;
+}
+
+function isInteractiveTerminal(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
 async function buildDoctorReport(device: "mc" | "tm", options: any) {
   const adapter = getDeviceAdapter(device);
   const cookieKey = cookieKeyForDevice(device);
@@ -625,7 +692,7 @@ async function buildDoctorReport(device: "mc" | "tm", options: any) {
 async function listRecipesCommand(options: any) {
   const device = await resolveCommandDevice(options);
   const adapter = getDeviceAdapter(device);
-  const activeCookie = requireCookieForDevice(device, options);
+  const activeCookie = await resolveCookieForDevice(device, options);
   const size = Number(options.limit ?? options.size ?? 20);
   const result = await adapter.listDrafts({ cookie: activeCookie, size }) as any;
 
@@ -702,12 +769,12 @@ program
       keepOpen: options.keepOpen,
       installBrowsers: options.installBrowser,
       credentials,
-      onStatus: (message: string) => console.error(message)
+      onStatus: printStatus
     } as any);
 
     if (options.save) {
       upsertDotEnvValue(GLOBAL_ENV_PATH, cookieKey, result.cookie);
-      console.error(`Saved ${cookieKey} to ${GLOBAL_ENV_PATH}.`);
+      printStatus(`Saved ${cookieKey} to ${GLOBAL_ENV_PATH}.`);
     }
 
     if (options.print !== false) {
@@ -748,7 +815,8 @@ program
     } catch (error) {
       if (sourceDevice && isInteractive && isSourceAuthError(source, error)) {
         const adapter = getDeviceAdapter(sourceDevice);
-        console.error(`\n  ${adapter.deviceName} session is missing or expired.`);
+        blankLine();
+        printStatus(`${adapter.deviceName} session is missing or expired.`);
         const shouldOpen = await confirm({
           message: "  Open the login browser now and retry retrieval?",
           default: true,
@@ -757,7 +825,7 @@ program
 
         const loginResult = await adapter.browserLogin({
           locale: sourceDevice === "tm" ? (process.env.TM_LOCALE ?? "de-DE") : (process.env.MC_LOCALE ?? "de-DE"),
-          onStatus: (message: string) => console.error(message),
+          onStatus: printStatus,
         } as any);
 
         const refreshedCookies = {
@@ -895,7 +963,7 @@ program
   .action(async (options) => {
     const device = await resolveCommandDevice(options);
     const adapter = getDeviceAdapter(device);
-    const activeCookie = requireCookieForDevice(device, options);
+    const activeCookie = await resolveCookieForDevice(device, options);
 
     printOutput(await adapter.getCurrentUser(activeCookie), program.optsWithGlobals().json, (v) => {
       return formatUserForTerminal(device, v);
@@ -925,7 +993,7 @@ program
   .action(async (id, options) => {
     const device = await resolveCommandDevice(options);
     const adapter = getDeviceAdapter(device);
-    const activeCookie = requireCookieForDevice(device, options);
+    const activeCookie = await resolveCookieForDevice(device, options);
 
     const result = await adapter.getRecipe({ cookie: activeCookie, id, public: options.public });
     if (options.input) {

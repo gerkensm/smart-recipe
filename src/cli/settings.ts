@@ -4,6 +4,7 @@ import { supportedLocales } from "../catalogs/index.js";
 import type { SupportedLocale } from "../catalogs/types.js";
 import type { RecipeSource } from "../sources/index.js";
 import { confirm, select } from "./prompts.js";
+import { blankLine, printSuccess } from "./terminal.js";
 
 export function cookieKeyForDevice(device: "mc" | "tm"): "MC_COOKIE" | "TM_COOKIE" {
   return device === "tm" ? "TM_COOKIE" : "MC_COOKIE";
@@ -22,7 +23,7 @@ export async function getOrPromptDevice(
   let device = options.device || process.env.TARGET_DEVICE;
   if (!device) {
     if (isInteractive) {
-      console.log();
+      blankLine();
       device = await select({
         message: "Which smart cooker do you want to target?",
         choices: [
@@ -37,7 +38,8 @@ export async function getOrPromptDevice(
       });
       if (saveSettings) {
         upsertDotEnvValue(configPath, "TARGET_DEVICE", device);
-        console.log(`✓ Saved TARGET_DEVICE to ${configPath}\n`);
+        printSuccess(`Saved TARGET_DEVICE to ${configPath}`);
+        blankLine();
       } else {
         process.env.SAVE_SETTINGS = "false";
       }
@@ -116,7 +118,8 @@ export async function getOrPromptTargetLocale(
   });
   if (saveSettings) {
     upsertDotEnvValue(configPath, localeKey, selectedLocale);
-    console.log(`✓ Saved ${localeKey} to ${configPath}\n`);
+    printSuccess(`Saved ${localeKey} to ${configPath}`);
+    blankLine();
   } else {
     process.env.SAVE_SETTINGS = "false";
   }
