@@ -231,6 +231,8 @@ smart-recipe create "https://example.com/recipe"
 
 SmartRecipe will walk you through everything interactively — API key, recipe generation, a preview in the terminal, and whether to upload.
 
+In an interactive terminal, long-running steps such as OpenAI recipe generation, AI image generation, and browser authentication show loading spinners. In non-interactive contexts, including CI, redirected input/output, or `--json`, prompts and spinners are suppressed so output stays script-friendly.
+
 If you want to skip every prompt and always upload automatically:
 
 ```bash
@@ -313,8 +315,8 @@ smart-recipe create "https://example.com/recipe" \
 | Command | Purpose |
 | --- | --- |
 | `create` / `import-url` | Retrieve a URL, generate a device workflow with OpenAI, and optionally upload a draft. |
-| `create-file` / `import-file` | Generate from a local text/markdown file. |
-| `create-stdin` / `import-stdin` | Generate from piped stdin. |
+| `create-file` / `import-file` | Generate from a local text/markdown file. Supports `--title` and `--url` for source context. |
+| `create-stdin` / `import-stdin` | Generate from piped stdin. Supports `--title` and `--url` for source context. |
 | `retrieve` | Inspect a web page, MC recipe URL, or Cookidoo recipe URL before conversion. |
 | `doctor` | Check config, saved cookies, and live session health. |
 | `me` / `profile` | Print account/session profile details. |
@@ -352,6 +354,12 @@ smart-recipe doctor --device mc
 smart-recipe doctor --device tm
 ```
 
+Skip the live account request when you only want to inspect local configuration:
+
+```bash
+smart-recipe doctor --device mc --no-check-auth
+```
+
 ### List recent draft recipes
 
 ```bash
@@ -360,6 +368,12 @@ smart-recipe recipes --device tm
 ```
 
 `drafts` remains as an alias for `recipes`.
+
+Filter drafts by title or ID:
+
+```bash
+smart-recipe recipes --device tm --search curry --limit 10
+```
 
 ### Fetch a single recipe
 
@@ -417,15 +431,22 @@ smart-recipe catalog
 | `--device <device>`                   | Target device: `mc` (Monsieur Cuisine) or `tm` (Thermomix).                                             |
 | `--target <device>`                   | Alias for `--device`, useful when the input URL is from another device.                                 |
 | `--source <source>`                   | Force source detection: `web`, `mc`, `cookidoo`, or `tm`.                                               |
+| `--source-locale <locale>`            | Locale for authenticated source API calls when the URL or ID does not include one.                      |
 | `--source-cookie <cookie>`            | Cookie for authenticated source retrieval. Applies to the detected/forced source.                       |
 | `--mc-source-cookie <cookie>`         | Cookie for retrieving Monsieur Cuisine source recipes.                                                   |
 | `--tm-source-cookie <cookie>`         | Cookie for retrieving Cookidoo / Thermomix source recipes.                                               |
 | `--tm-version <version>`              | Thermomix device model version: `tm7`, `tm6`, or `tm5`.                                                |
+| `--mc-food-processor <boolean>`       | Set whether the optional Monsieur Cuisine food processor/cutter attachment is available.                |
 | `--experimental-tm-modes`             | Alias for `--extend-tm-modes`; allows modes that Cookidoo may show as unsupported in My Creations.      |
 | `--no-print-markdown`                 | Do not pretty-print the retrieved page markdown before generation.                                     |
 | `--markdown`                          | On `retrieve`, print the intermediate source markdown instead of the pretty recipe view.                |
+| `--title <title>`                     | On `create-file` / `create-stdin`, provide source title context for the LLM.                           |
+| `--url <url>`                         | On `create-file` / `create-stdin`, provide original source URL context for the LLM.                    |
 | `--full-response`                     | Print the extracted page summary, generated recipe, payload, image info, and upload response.          |
 | `--json`                              | Print machine-readable JSON (disables all interactive prompts).                                        |
+| `--json-logs`                         | Write logs as machine-readable JSON instead of pretty text.                                            |
+| `--no-save-settings`                  | Do not save API keys, cookies, or device settings to `~/.smart-recipe`.                                |
+| `--debug`                             | Print full error details, response bodies, and stack traces.                                           |
 | `--log-level debug`                   | Show more detailed progress logs.                                                                      |
 | `--model <model>`                     | Choose the OpenAI recipe model.                                                                        |
 | `--reasoning <effort>`                | Choose OpenAI reasoning effort: `minimal`, `low`, `medium`, or `high`.                                 |
@@ -436,6 +457,20 @@ smart-recipe catalog
 | `--image-quality <quality>`           | Choose image quality: `low`, `medium`, `high`, or `auto`.                                              |
 | `--cookie <cookie>`                   | Pass a Monsieur Cuisine or Thermomix cookie directly (skips the auth prompt).                          |
 | `--env <path>`                        | Load a specific env file.                                                                              |
+
+### Browser login options
+
+`login-browser` accepts additional Playwright controls for locked-down machines, CI-like environments, and custom browser installs:
+
+| Option | What it does |
+| --- | --- |
+| `--profile-dir <path>` | Use a specific Playwright browser profile directory. |
+| `--start-url <url>` | Override the first URL opened in the login window. |
+| `--browser-channel <channel>` | Use an installed browser channel such as `chrome` or `msedge`. |
+| `--browser-path <path>` | Use a specific browser executable. |
+| `--disable-browser-sandbox` | Launch Chromium with Playwright's default disabled sandbox behavior. |
+| `--keep-open` | Leave the browser window open after cookies are captured. |
+| `--no-install-browser` | Do not automatically download Playwright Chromium if it is missing. |
 
 ---
 
@@ -545,6 +580,12 @@ Or pass a cookie manually with `--cookie`.
 
 For source retrieval, use `--mc-source-cookie`, `--tm-source-cookie`, or the generic `--source-cookie` when you do not want to use the saved session.
 
+### Validation errors are hard to understand
+
+SmartRecipe validates both the model-facing recipe input and final device payloads. CLI validation errors include human-readable schema output with the exact invalid property. When the LLM needs to self-correct, SmartRecipe feeds it concise JSON pointer errors such as `/servingSize/steps/0/mode/speed must be <= 3`.
+
+Use `--debug` to include full response bodies and stack traces for API or validation failures.
+
 ### The recipe looks wrong
 
 Try:
@@ -608,17 +649,26 @@ Node.js must be `20.18` or newer.
 | `MC_COOKIE`               |         empty | Optional saved Monsieur Cuisine cookie.                   |
 | `MC_LOGIN`                |         empty | Optional Lidl Plus email for browser login prefill.       |
 | `MC_PW`                   |         empty | Optional Lidl Plus password for browser login automation. |
+| `MC_HAS_FOOD_PROCESSOR`   |       `false` | Whether the optional Monsieur Cuisine cutter attachment is available. |
 | `TM_VERSION`              |         `tm6` | Default Thermomix version: `tm7`, `tm6`, or `tm5`.        |
 | `TM_LOCALE`               |       `de-DE` | Thermomix locale.                                         |
 | `TM_COOKIE`               |         empty | Optional saved Thermomix cookie.                          |
+| `TM_COOKIES`              |         empty | Backward-compatible Thermomix cookie fallback.            |
 | `TM_LOGIN`                |         empty | Optional Cookidoo email for browser login prefill.        |
 | `TM_PW`                   |         empty | Optional Cookidoo password for browser login automation.  |
+| `SMART_RECIPE_BROWSER_CHANNEL` | empty | Installed browser channel for Playwright login, e.g. `chrome`. |
+| `SMART_RECIPE_BROWSER_PATH` | empty | Path to a browser executable for Playwright login. |
+| `SMART_RECIPE_BROWSER_SANDBOX` | unset | Set `true`/`false` to control Playwright Chromium sandbox behavior. |
+| `SAVE_SETTINGS`           |        `true` | Set `false` to prevent writing API keys, cookies, and device settings to `~/.smart-recipe`. |
+| `LOG_LEVEL`               |        `info` | Log level when explicitly enabled. Interactive human runs stay quiet by default unless this or `--log-level` is set. |
 
 ---
 
 ## For developers
 
 SmartRecipe is a TypeScript project. It can be used as a CLI and as a library.
+
+Before making architectural changes, especially with an AI coding assistant, read [`AGENTS.md`](AGENTS.md). It documents the dual-schema architecture, device boundaries, CLI rules, and testing expectations that keep generated recipes separate from device upload/execution.
 
 Main modules:
 

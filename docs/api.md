@@ -98,6 +98,65 @@ console.log(uploaded.recipeUrl);
 
 For Monsieur Cuisine, use `getDeviceAdapter("mc")` and pass an MC cookie to `uploadSmartRecipe`.
 
+### Image and Auth Injection
+
+Library callers can control upload authentication and image handling without using CLI flags. `uploadSmartRecipe()` and `DeviceApi.uploadRecipe()` accept:
+
+- `imageProvider`: an implementation of `RecipeImageProvider<TInput>`.
+- `authProvider`: an implementation of `AuthProvider`.
+
+Built-in image providers:
+
+```ts
+import { uploadSmartRecipe } from "smart-recipe/pipeline";
+import { OpenAIRecipeImageGenerator } from "smart-recipe/llm";
+import { NullImageProvider, RetrievedRecipeImageProvider } from "smart-recipe/pipeline";
+import { CookieAuthProvider } from "smart-recipe/mc";
+
+const uploadedWithGeneratedImage = await uploadSmartRecipe({
+  ...generated,
+  adapter,
+  locale: "de-DE",
+  authProvider: new CookieAuthProvider(process.env.MC_COOKIE ?? ""),
+  imageProvider: new OpenAIRecipeImageGenerator({
+    model: "gpt-image-2",
+    size: "1024x1024",
+    quality: "medium",
+  }),
+});
+
+const uploadedWithoutImage = await uploadSmartRecipe({
+  ...generated,
+  adapter,
+  locale: "de-DE",
+  cookie: process.env.MC_COOKIE,
+  imageProvider: new NullImageProvider(),
+});
+
+const uploadedWithBestSourceImage = await uploadSmartRecipe({
+  ...generated,
+  adapter,
+  locale: "de-DE",
+  cookie: process.env.MC_COOKIE,
+  imageProvider: new RetrievedRecipeImageProvider(),
+});
+```
+
+Custom auth providers only need to return a session:
+
+```ts
+import type { AuthProvider } from "smart-recipe/mc";
+
+const authProvider: AuthProvider = {
+  async getSession() {
+    return {
+      cookie: await loadCookieFromYourSecretStore(),
+      source: "cookie",
+    };
+  },
+};
+```
+
 ## Chrome Extension Style Usage
 
 A browser extension usually should not use the CLI login flow. It can pass cookies it already has permission to read, or send the URL/content to a backend that owns the session.
@@ -170,6 +229,16 @@ Common methods:
 
 This facade intentionally hides vendor naming differences such as MC proxy endpoints versus Cookidoo created/public/official recipe routes.
 
+The facade and adapters are generic:
+
+```ts
+import type { DeviceAdapter, DevicePromptOptions, RecipeUploadLogger } from "smart-recipe/devices";
+
+type MyAdapter = DeviceAdapter<MyRecipeInput, MyDevicePayload>;
+```
+
+`DeviceAdapter<TInput, TPayload>` uses strict input/payload generics, `DevicePromptOptions` for prompt/schema options, `RecipeUploadLogger` for the minimal upload logging contract, and explicit `AuthProvider` / `RecipeImageProvider<TInput>` dependencies for upload.
+
 ## Raw Vendor APIs
 
 Use the lower-level clients only when you need vendor-specific behavior that the unified device API does not expose.
@@ -197,3 +266,15 @@ Authenticated source retrieval throws when the matching cookie is missing or exp
 - Expired sessions usually surface as `MonsieurCuisineApiError` or `CookidooError` with `401` / `403`.
 
 The CLI catches these cases and can open browser login interactively. Library callers should decide how to obtain or refresh cookies in their own application.
+
+The CLI suppresses raw stack traces for known domain errors by default. Pass `--debug` to include response bodies and stack traces. Programmatic callers receive the original typed errors (`MonsieurCuisineApiError`, `CookidooError`, `AuthFlowError`) so they can decide how to render or recover.
+
+## Validation Boundaries
+
+SmartRecipe validates at multiple boundaries:
+
+- LLM output is validated against the model-facing input schema.
+- Device payloads are validated before upload.
+- Selected vendor API responses are validated with Typebox/AJV as soon as they cross the network/client boundary.
+
+Validation results expose concise JSON pointer errors for programmatic handling. Human CLI output uses formatted schema errors where appropriate, while LLM repair feedback stays compact and free of terminal color codes.

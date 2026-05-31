@@ -7,7 +7,7 @@ This document collects implementation-oriented notes for contributors and librar
 - `smart-recipe/recipes`: strongly typed recipe input, Smart mode helpers, validation, raw payload creation, and `formatRecipeTerminal` for terminal pretty-printing.
 - `smart-recipe/catalogs`: locale catalog data. Six locales (`de-DE`, `en-US`, `fr-FR`, `it-IT`, `pl-PL`, `cs-CZ`) ship with verified category and complexity IDs.
 - `smart-recipe/devices`: unified `DeviceApi` facade plus the lower-level `DeviceAdapter` abstraction (`MonsieurCuisineAdapter` and `ThermomixAdapter`) mapping device schemas, constraints, normalization rules, and API clients.
-- `smart-recipe/retriever`: recipe-page retrieval, Markdown conversion and preview image candidate selection.
+- `smart-recipe/retriever`: recipe-page retrieval, semantic JSON-LD extraction, Markdown conversion and preview image candidate selection.
 - `smart-recipe/sources`: source detection and retrieval for generic web pages, Monsieur Cuisine recipe URLs, Cookidoo official recipes, and Cookidoo created recipes. It converts all supported sources into `RetrievedRecipePage` markdown for LLM conversion, and can also return the raw source API object for inspection/pretty-printing.
 - `smart-recipe/llm`: OpenAI recipe and image generation using centralized prompt builders, the model-facing JSON schema and a validation repair loop.
 - `smart-recipe/mc`: Monsieur Cuisine Smart client, browser login, and draft upload.
@@ -31,6 +31,10 @@ The CLI (`src/cli/main.ts`) implements an interactive wizard for the `import-url
 9. **Cookie persistence** — offered after both auth paths.
 10. **Upload** — calls `uploadSmartRecipe`, prints the draft URL.
 
+Interactive human runs use CLI-only spinners for slow network boundaries: OpenAI recipe generation, OpenAI image generation, and browser login. Spinners are disabled for `--json`, non-TTY use, and explicit log output so machine-readable output and logs do not collide.
+
+The top-level CLI entry point is also the error boundary. Known domain errors (`MonsieurCuisineApiError`, `CookidooError`, `AuthFlowError`) are rendered as short user-facing messages without raw stack traces. Passing `--debug` includes response bodies and stack traces.
+
 The `retrieve` command has a separate display flow:
 
 - For web pages, it prints the extracted markdown and image candidates.
@@ -50,7 +54,7 @@ Other inspection commands:
 The public device API is intentionally layered:
 
 - `createDeviceApi({ device, cookie, locale })`: recommended for application code. It exposes the same method names for MC and TM: `getProfile`, `listRecipes`, `getRecipe`, `validateInput`, `normalizeInput`, `formatInputForTerminal`, `createPayload`, `uploadRecipe`, and `browserLogin`.
-- `DeviceAdapter`: internal workflow abstraction used by the pipeline and CLI. It keeps generation, validation, payload creation, terminal formatting, and upload behind one interface.
+- `DeviceAdapter<TInput, TPayload>`: internal workflow abstraction used by the pipeline and CLI. It keeps generation, validation, payload creation, terminal formatting, and upload behind one interface. The adapter contract uses `DevicePromptOptions`, `RecipeUploadLogger`, `AuthProvider`, and `RecipeImageProvider<TInput>` rather than untyped option bags.
 - Raw vendor clients: `MonsieurCuisineApi` / `MonsieurCuisineSmartClient` and `ThermomixApi` / `CookidooApi`. These expose vendor-shaped methods and may differ because the underlying APIs differ.
 
 Prefer `createDeviceApi` in docs and examples unless the caller needs vendor-specific behavior such as Cookidoo official recipe retrieval or direct MC proxy access.
@@ -66,6 +70,8 @@ Prefer `createDeviceApi` in docs and examples unless the caller needs vendor-spe
 
 `fetchRecipeSourceAsPage(source, options)` returns a `RetrievedRecipePage` for LLM conversion. `fetchRecipeSourceWithRaw(source, options)` returns `{ raw, page }`, which the CLI uses to pretty-print authenticated MC/Cookidoo sources without reparsing markdown.
 
+For generic web pages, the retriever does more than plain text extraction. It scans `application/ld+json` blocks, traverses nested JSON-LD and `@graph` arrays, finds objects with `@type: "Recipe"`, and formats structured `recipeIngredient` / `recipeInstructions` data into Markdown. That structured recipe block is prepended to the extracted page markdown so the LLM sees semantic recipe data even when the visible page text is noisy.
+
 Authenticated sources use source cookies, separate from upload cookies:
 
 - `options.cookies.mc` for Monsieur Cuisine source retrieval.
@@ -75,6 +81,17 @@ Authenticated sources use source cookies, separate from upload cookies:
 Generation/upload locale is target-specific and separate from source retrieval locale. The CLI accepts `--locale` / `--language` for the generated recipe and asks interactively when no `MC_LOCALE` or `TM_LOCALE` is configured. Full locale tags and supported two-letter aliases are accepted (`de`, `en`, `fr`, `it`, `pl`, `cs`). `--source-locale` controls authenticated source API calls only when the source URL or ID does not already provide a locale.
 
 Cookidoo official recipe payloads can arrive in grouped API form (`recipeIngredientGroups` / `recipeStepGroups`) rather than JSON-LD form (`recipeIngredient` / `recipeInstructions`). The Cookidoo formatter and mapper normalize both shapes.
+
+## Validation Boundaries
+
+SmartRecipe uses separate validation boundaries for model output, device payloads, and vendor API responses:
+
+- **Model output**: LLM JSON is validated against the model-facing `RecipeInputSchema` or `CookidooRecipeInputSchema`. Errors returned to the LLM stay as compact JSON pointer strings.
+- **Human diagnostics**: CLI validation output can include `better-ajv-errors` formatted messages for readable property-level debugging.
+- **Device payloads**: Monsieur Cuisine payloads are validated before upload so payload-builder regressions fail locally.
+- **Vendor responses**: Selected MC and Cookidoo response shapes are validated with Typebox/AJV immediately after network receipt. Schemas are intentionally tolerant of extra vendor fields but strict about fields SmartRecipe consumes, such as recipe IDs, list containers, media upload URLs, image signatures, and Cloudinary upload IDs.
+
+AJV schemas are compiled once at module scope and reused across validation calls. This matters because LLM repair loops may validate several failed attempts before succeeding.
 
 ## Pipeline Split
 
