@@ -362,10 +362,11 @@ describe("ThermomixAdapter", () => {
         size: 20
       });
 
-      expect(mockRequest).toHaveBeenCalledWith({
+      expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
         method: "GET",
-        path: "/created-recipes/de-DE"
-      });
+        path: "/created-recipes/de-DE",
+        responseSchema: expect.any(Object),
+      }));
       expect(result.data.total).toBe(1);
       expect(result.data.recipes).toEqual([
         {
@@ -393,10 +394,11 @@ describe("ThermomixAdapter", () => {
         size: 20
       });
 
-      expect(mockRequest).toHaveBeenCalledWith({
+      expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
         method: "GET",
-        path: "/created-recipes/en-US"
-      });
+        path: "/created-recipes/en-US",
+        responseSchema: expect.any(Object),
+      }));
     });
   });
 

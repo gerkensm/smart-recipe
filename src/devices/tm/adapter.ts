@@ -7,7 +7,15 @@ import { CookidooRecipeInputSchema, type CookidooRecipeInput } from "./schema.js
 import { createCookidooMetaPatch, createCookidooInstructions, getImageDimensions, type CookidooPayload } from "./payload.js";
 import { buildCookidooRecipeInstructions } from "./prompts.js";
 import { browserLoginForCookidoo, passwordLoginForCookidoo } from "./browser-login.js";
-import { COOKIDOO_IMAGE_UPLOAD_PRESET, CookidooClient } from "./client.js";
+import {
+  COOKIDOO_IMAGE_UPLOAD_PRESET,
+  CookidooClient,
+  CookidooCopyRecipeResponseSchema,
+  CookidooCreatedRecipeListSchema,
+  CookidooPatchResponseSchema,
+  CookidooProfileSchema,
+  CookidooRecipePageSchema,
+} from "./client.js";
 import { RetrievedRecipeImageProvider, type RecipeImageProvider } from "../../pipeline/images.js";
 import { extractJsonLd, findRecipeObjects } from "../../retriever/json-ld.js";
 import type { SupportedLocale } from "../../catalogs/types.js";
@@ -272,6 +280,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, Cook
       method: "GET",
       path: "/community/profile",
       accept: "application/json",
+      responseSchema: CookidooProfileSchema,
     });
   }
 
@@ -281,6 +290,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, Cook
     const res = await client.request<any>({
       method: "GET",
       path: `/created-recipes/${client.language}`,
+      responseSchema: CookidooCreatedRecipeListSchema,
     });
     const candidateRecipes = Array.isArray(res) ? res : res?.items ?? res?.data ?? [];
     const allRecipes = Array.isArray(candidateRecipes) ? candidateRecipes : [];
@@ -321,7 +331,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, Cook
         ? `/created-recipes/public/recipes/${client.language}/${encodeURIComponent(options.id)}`
         : `/created-recipes/${client.language}/${encodeURIComponent(options.id)}`;
 
-    const result = await client.request<any>({ method: "GET", path });
+    const result = await client.request<any>({ method: "GET", path, responseSchema: CookidooRecipePageSchema });
     
     if (isOfficial && typeof result === "string") {
       const jsonLd = extractJsonLd(result);
@@ -424,6 +434,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, Cook
         draft = await client.request<any>({
           method: "POST",
           path: `/created-recipes/${client.language}`,
+          responseSchema: CookidooCopyRecipeResponseSchema,
           body: {
             recipeUrl: publicUrl,
             servingSize: 1,
@@ -467,6 +478,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, Cook
     const patchedMeta = await client.request<any>({
       method: "PATCH",
       path: `/created-recipes/${client.language}/${encodeURIComponent(recipeId)}`,
+      responseSchema: CookidooPatchResponseSchema,
       body: metaPatch,
     });
 
@@ -474,6 +486,7 @@ export class ThermomixAdapter implements DeviceAdapter<CookidooRecipeInput, Cook
     const patchedInstructions = await client.request<any>({
       method: "PATCH",
       path: `/created-recipes/${client.language}/${encodeURIComponent(recipeId)}`,
+      responseSchema: CookidooPatchResponseSchema,
       body: { instructions },
     });
 

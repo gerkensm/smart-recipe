@@ -1,4 +1,6 @@
+import Type, { type TSchema } from "typebox";
 import { CookidooAuthError, CookidooError, CookidooRateLimitError, isRateLimitBody } from "./errors.js";
+import { validateApiResponse } from "../response-validation.js";
 
 export interface Localization {
   domain: string;
@@ -39,7 +41,36 @@ export interface CookidooRequestOptions {
   body?: unknown;
   accept?: string;
   headers?: Record<string, string>;
+  responseSchema?: TSchema;
 }
+
+export const CookidooObjectResponseSchema = Type.Object({}, { additionalProperties: true });
+export const CookidooCreatedRecipeSchema = Type.Object({
+  recipeId: Type.Optional(Type.String()),
+  recipeContent: Type.Optional(Type.Object({}, { additionalProperties: true })),
+}, { additionalProperties: true });
+export const CookidooCreatedRecipeListSchema = Type.Union([
+  Type.Array(CookidooCreatedRecipeSchema),
+  Type.Object({
+    items: Type.Optional(Type.Array(CookidooCreatedRecipeSchema)),
+    data: Type.Optional(Type.Array(CookidooCreatedRecipeSchema)),
+  }, { additionalProperties: true }),
+]);
+export const CookidooProfileSchema = Type.Object({}, { additionalProperties: true });
+export const CookidooRecipePageSchema = Type.Union([
+  Type.String(),
+  Type.Object({}, { additionalProperties: true }),
+]);
+export const CookidooCopyRecipeResponseSchema = Type.Object({}, { additionalProperties: true });
+export const CookidooPatchResponseSchema = Type.Object({}, { additionalProperties: true });
+const CookidooImageSignatureResponseSchema = Type.Union([
+  Type.String(),
+  Type.Object({}, { additionalProperties: true }),
+]);
+const CloudinaryUploadResponseSchema = Type.Object({
+  public_id: Type.String(),
+  format: Type.String(),
+}, { additionalProperties: true });
 
 export class CookidooClient {
   readonly domain: string;
@@ -100,6 +131,7 @@ export class CookidooClient {
     const response = await this.request<unknown>({
       method: "POST",
       path: `/created-recipes/${this.language}/image/signature`,
+      responseSchema: CookidooImageSignatureResponseSchema,
       headers: {
         "X-Requested-With": "XMLHttpRequest",
       },
@@ -168,6 +200,17 @@ export class CookidooClient {
       });
     }
 
+    const validation = validateApiResponse(CloudinaryUploadResponseSchema, parsed);
+    if (!validation.ok) {
+      throw new CookidooError({
+        message: "Cloudinary upload response shape changed",
+        status: res.status,
+        body: { errors: validation.errors, body: parsed },
+        url: "https://api-eu.cloudinary.com/v1_1/vorwerk-users-gc/image/upload",
+        method: "POST",
+      });
+    }
+
     return parsed as { public_id: string; format: string };
   }
 }
@@ -229,6 +272,19 @@ async function parseResponse<T>(res: Response, opts: CookidooRequestOptions): Pr
       url: opts.path,
       method: opts.method ?? "GET",
     });
+  }
+
+  if (opts.responseSchema) {
+    const validation = validateApiResponse(opts.responseSchema, parsed);
+    if (!validation.ok) {
+      throw new CookidooError({
+        message: "Cookidoo API response shape changed",
+        status: res.status,
+        body: { errors: validation.errors, body: parsed },
+        url: opts.path,
+        method: opts.method ?? "GET",
+      });
+    }
   }
 
   return parsed as T;

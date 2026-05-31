@@ -1,4 +1,12 @@
-import { CookidooClient } from "./client.js";
+import {
+  CookidooClient,
+  CookidooCopyRecipeResponseSchema,
+  CookidooCreatedRecipeListSchema,
+  CookidooCreatedRecipeSchema,
+  CookidooPatchResponseSchema,
+  CookidooProfileSchema,
+  CookidooRecipePageSchema,
+} from "./client.js";
 import type { CookidooPayload } from "./payload.js";
 import type {
   CookidooCreatedRecipe,
@@ -51,6 +59,7 @@ export class CookidooApi {
       method: "GET",
       path: "/community/profile",
       accept: "application/json",
+      responseSchema: CookidooProfileSchema,
     });
   }
 
@@ -58,6 +67,7 @@ export class CookidooApi {
     const res = await this.client.request<any>({
       method: "GET",
       path: `/created-recipes/${this.language}`,
+      responseSchema: CookidooCreatedRecipeListSchema,
     });
     const candidateRecipes = Array.isArray(res) ? res : res?.items ?? res?.data ?? [];
     const allRecipes = Array.isArray(candidateRecipes) ? candidateRecipes : [];
@@ -78,6 +88,7 @@ export class CookidooApi {
     return this.client.request<CookidooCreatedRecipe>({
       method: "GET",
       path: `/created-recipes/${this.language}/${encodeURIComponent(id)}`,
+      responseSchema: CookidooCreatedRecipeSchema,
     });
   }
 
@@ -85,6 +96,7 @@ export class CookidooApi {
     return this.client.request<CookidooCreatedRecipe>({
       method: "GET",
       path: `/created-recipes/public/recipes/${this.language}/${encodeURIComponent(id)}`,
+      responseSchema: CookidooCreatedRecipeSchema,
     });
   }
 
@@ -93,6 +105,7 @@ export class CookidooApi {
       method: "GET",
       path: `/recipes/recipe/${this.language}/${encodeURIComponent(id)}`,
       accept: "application/json",
+      responseSchema: CookidooRecipePageSchema,
     });
   }
 
@@ -103,6 +116,7 @@ export class CookidooApi {
     return this.client.request<CookidooCreatedRecipe>({
       method: "POST",
       path: `/created-recipes/${this.language}`,
+      responseSchema: CookidooCopyRecipeResponseSchema,
       body: {
         recipeUrl,
         servingSize,
@@ -114,6 +128,7 @@ export class CookidooApi {
     return this.client.request<CookidooCreatedRecipe>({
       method: "PATCH",
       path: `/created-recipes/${this.language}/${encodeURIComponent(id)}`,
+      responseSchema: CookidooPatchResponseSchema,
       body: meta,
     });
   }
@@ -122,6 +137,7 @@ export class CookidooApi {
     return this.client.request<CookidooCreatedRecipe>({
       method: "PATCH",
       path: `/created-recipes/${this.language}/${encodeURIComponent(id)}`,
+      responseSchema: CookidooPatchResponseSchema,
       body: { instructions },
     });
   }

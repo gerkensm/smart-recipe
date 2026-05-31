@@ -98,6 +98,7 @@ loadDotEnv(".env", { override: true });
 const optionCategories: Record<string, string> = {
   "--env": "Global Settings",
   "--log-level": "Global Settings",
+  "--debug": "Global Settings",
   "--json": "Global Settings",
   "--json-logs": "Global Settings",
   "--no-save-settings": "Global Settings",
@@ -232,6 +233,7 @@ program
   .description("Generate, inspect, and upload smart-cooker recipes.")
   .option("--env <path>", "Load a specific env file instead of the default local .env")
   .option("--log-level <level>", "Log level", process.env.LOG_LEVEL ?? "info")
+  .option("--debug", "Print full error details and stack traces")
   .option("--json", "Output results as machine-readable JSON instead of human-readable text")
   .option("--json-logs", "Write machine-readable JSON logs instead of pretty text logs")
   .option("--no-save-settings", "Do not save selected cooker settings or API keys to ~/.smart-recipe configuration file")
@@ -1073,7 +1075,7 @@ const isTestEnv = typeof process !== "undefined" && (
 
 if (!isTestEnv) {
   program.parseAsync().catch((error) => {
-    console.error(formatCliError(error));
-    process.exitCode = 1;
+    console.error(formatCliError(error, { debug: Boolean(program.optsWithGlobals().debug) }));
+    process.exit(1);
   });
 }

@@ -119,53 +119,59 @@ export function printableImportResult(result: Awaited<ReturnType<typeof importRe
   };
 }
 
-export function formatCliError(error: any): string {
-  if (error instanceof MonsieurCuisineApiError) return formatMonsieurCuisineApiError(error);
-  if (error instanceof AuthFlowError) return formatAuthFlowError(error);
-  if (error instanceof CookidooError) return formatCookidooError(error);
-  return formatGenericCliError(error);
+const ansi = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  red: "\x1b[31m",
+  yellow: "\x1b[33m",
+};
+
+export interface CliErrorFormatOptions {
+  debug?: boolean;
 }
 
-function formatMonsieurCuisineApiError(error: MonsieurCuisineApiError): string {
-  return [
-    `${error.name}: ${error.message}`,
+export function formatCliError(error: unknown, options: CliErrorFormatOptions = {}): string {
+  if (error instanceof MonsieurCuisineApiError) return formatMonsieurCuisineApiError(error, options);
+  if (error instanceof AuthFlowError) return formatAuthFlowError(error, options);
+  if (error instanceof CookidooError) return formatCookidooError(error, options);
+  return formatGenericCliError(error, options);
+}
+
+function formatMonsieurCuisineApiError(error: MonsieurCuisineApiError, options: CliErrorFormatOptions): string {
+  return withDebug([
+    errorHeader("Monsieur Cuisine request failed"),
+    error.message,
     error.status === undefined ? undefined : `Status: ${error.status}`,
     error.code === undefined ? undefined : `Code: ${error.code}`,
     error.endpoint === undefined ? undefined : `Endpoint: ${error.endpoint}`,
-    error.response === undefined ? undefined : "Response:",
-    error.response === undefined ? undefined : JSON.stringify(error.response, null, 2)
-  ]
-    .filter(Boolean)
-    .join("\n");
+    debugHint(options),
+  ], error, options, error.response);
 }
 
-function formatAuthFlowError(error: AuthFlowError): string {
-  return [
-    `${error.name}: ${error.message}`,
+function formatAuthFlowError(error: AuthFlowError, options: CliErrorFormatOptions): string {
+  return withDebug([
+    errorHeader("Authentication failed"),
+    error.message,
     `Code: ${error.code}`,
-    error.response === undefined ? undefined : "Response:",
-    error.response === undefined ? undefined : JSON.stringify(error.response, null, 2)
-  ]
-    .filter(Boolean)
-    .join("\n");
+    debugHint(options),
+  ], error, options, error.response);
 }
 
-function formatCookidooError(error: CookidooError): string {
-  return [
-    `${error.name}: ${error.message}`,
+function formatCookidooError(error: CookidooError, options: CliErrorFormatOptions): string {
+  return withDebug([
+    errorHeader("Cookidoo request failed"),
+    error.message,
     error.status === undefined ? undefined : `Status: ${error.status}`,
     error.method === undefined ? undefined : `Method: ${error.method}`,
     error.url === undefined ? undefined : `URL: ${error.url}`,
-    error.body === undefined ? undefined : "Body:",
-    error.body === undefined ? undefined : JSON.stringify(error.body, null, 2)
-  ]
-    .filter(Boolean)
-    .join("\n");
+    debugHint(options),
+  ], error, options, error.body);
 }
 
-function formatGenericCliError(error: any): string {
-  const message = error?.stack || error?.message || String(error);
-  const plain = error?.message || String(error);
+function formatGenericCliError(error: unknown, options: CliErrorFormatOptions): string {
+  const plain = error instanceof Error ? error.message : String(error);
+  const message = options.debug && error instanceof Error && error.stack ? error.stack : plain;
   const suggestions: string[] = [];
 
   if (/No .* cookie found/i.test(plain)) {
@@ -185,11 +191,38 @@ function formatGenericCliError(error: any): string {
     suggestions.push("Set OPENAI_API_KEY in the environment or ~/.smart-recipe.");
   }
 
-  if (suggestions.length === 0) return message;
+  if (suggestions.length === 0) return `${errorHeader("Command failed")}\n${message}`;
   return [
+    errorHeader("Command failed"),
     message,
     "",
-    "Suggested next steps:",
+    `${ansi.bold}Suggested next steps:${ansi.reset}`,
     ...suggestions.map((suggestion) => `- ${suggestion}`)
   ].join("\n");
+}
+
+function errorHeader(message: string): string {
+  return `${ansi.red}✗ ${ansi.bold}${message}${ansi.reset}`;
+}
+
+function debugHint(options: CliErrorFormatOptions): string | undefined {
+  return options.debug ? undefined : `${ansi.dim}Run again with --debug for response details and stack trace.${ansi.reset}`;
+}
+
+function withDebug(
+  lines: Array<string | undefined>,
+  error: Error,
+  options: CliErrorFormatOptions,
+  response?: unknown
+): string {
+  const visible = lines.filter(Boolean) as string[];
+  if (!options.debug) return visible.join("\n");
+  return [
+    ...visible,
+    response === undefined ? undefined : "",
+    response === undefined ? undefined : `${ansi.yellow}Response:${ansi.reset}`,
+    response === undefined ? undefined : JSON.stringify(response, null, 2),
+    error.stack ? "" : undefined,
+    error.stack,
+  ].filter(Boolean).join("\n");
 }
